@@ -1,0 +1,20 @@
+{
+    "valueSetId": "covid-19-lab-test-type-ua",
+    "valueSetDate": "2021-08-12",
+    "valueSetValues": {
+        "LP6464-4": {
+            "display": "Тести ампліфікації нуклеїнових кислот із детекцією молекулярних зондів",
+            "lang": "ua",
+            "active": true,
+            "version": "2.69",
+            "system": "http://loinc.org"
+        },
+        "LP217198-3": {
+            "display": "Експрес імунохроматографія",
+            "lang": "ua",
+            "active": true,
+            "version": "2.69",
+            "system": "http://loinc.org"
+        }
+    }
+}

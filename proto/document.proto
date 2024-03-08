@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+package ua.gov.diia.document;
+option java_multiple_files = true;
+option java_package = "ua.gov.diia.document";
+
+message ShareDocumentReq {
+  string documentId = 1;
+  string documentType = 2;
+  optional string localization = 3;
+}
+
+message ShareDocumentRes {
+  string id = 1;
+  string link = 2;
+  optional string barcode = 3;
+  string timerText = 4;
+  int32 timerTime = 5;
+}

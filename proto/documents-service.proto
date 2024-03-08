@@ -1,0 +1,354 @@
+syntax = "proto3";
+
+import "google/api/annotations.proto";
+import "google/api/http.proto";
+import "google/protobuf/empty.proto";
+import "google/protobuf/timestamp.proto";
+
+import "document.proto";
+import "documents/nameValue.proto";
+import "documents/documentData.proto";
+
+package ua.gov.diia.documentsservice;
+option java_multiple_files = true;
+option java_package = "ua.gov.diia.documentsservice";
+
+service DocumentsService {
+  rpc expireDocument(ExpireDocumentRequest) returns (google.protobuf.Empty);
+  rpc getIdentityDocument(google.protobuf.Empty)
+      returns (GetIdentityDocumentResponse);
+  rpc getPassportToProcess(GetPassportToProcessRequest)
+      returns (GetPassportToProcessResponse);
+  rpc getInternalPassportWithRegistration(
+      GetInternalPassportWithRegistrationRequest)
+      returns (GetInternalPassportWithRegistrationResponse);
+
+  rpc ShareDocument(ua.gov.diia.document.ShareDocumentReq)
+      returns (ua.gov.diia.document.ShareDocumentRes) {
+    option (google.api.http) = {
+      get : "/api/v1/documents/{documentType}/{documentId}/share"
+    };
+  }
+}
+
+message GetPassportToProcessRequest { optional bool handlePhoto = 1; }
+
+message GetPassportToProcessResponse {
+  oneof document {
+    InternalPassport internalPassport = 1;
+    ForeignPassport foreignPassport = 2;
+  }
+}
+
+message ExpireDocumentRequest {
+  string documentType = 1;
+  string userIdentifier = 2;
+}
+
+message GetInternalPassportWithRegistrationRequest {
+  optional bool digitalPassportRegistration = 1;
+}
+
+message GetInternalPassportWithRegistrationResponse {
+  PassportRegistrationInfo registration = 1;
+  optional PassportInfo passport = 2;
+}
+
+message PassportRegistrationInfo {
+  PassportRegistration address = 1;
+  optional google.protobuf.Timestamp registrationDate = 2;
+  optional google.protobuf.Timestamp deregistrationDate = 3;
+  optional string fullName = 4;
+}
+
+message PassportRegistration {
+  optional string country = 1;
+  optional string postbox = 2;
+  optional string addressKoatuu = 3;
+  optional string addressKatottg = 4;
+  optional string addressGromKatottg = 5;
+  optional string region = 6;
+  optional string regionName = 7;
+  optional string regionDistrict = 8;
+  optional string regionDistrictName = 9;
+  optional string cityDistrict = 10;
+  optional string cityDistrictName = 11;
+  optional string cityDistrictKatottg = 12;
+  optional string settlementName = 13;
+  optional string settlementType = 14;
+  optional string streetName = 15;
+  optional string streetType = 16;
+  optional string buildingNumber = 17;
+  optional string buildingPart = 18;
+  optional string apartment = 19;
+  optional string registrationDate = 20;       // DD.MM.YYYY
+  optional string cancelregistrationDate = 21; // DD.MM.YYYY
+}
+
+message PassportInfo {
+  string lastNameUA = 1;
+  string firstNameUA = 2;
+  optional string middleNameUA = 3;
+  string recordNumber = 4;
+  PassportGenderEN genderEN = 5;
+  string birthday = 6;
+  string birthCountry = 7;
+  string birthPlaceUA = 8;
+  PassportByInnDocumentType type = 9;
+  optional string docSerial = 10;
+  string docNumber = 11;
+  string issueDate = 12;
+  optional string expirationDate = 13;
+  string department = 14;
+}
+
+enum PassportGenderEN {
+  F = 0;
+  M = 1;
+}
+
+enum PassportByInnDocumentType {
+  id = 0;
+  pass = 1;
+}
+
+message GetIdentityDocumentResponse {
+  string identityType = 1;
+  oneof document {
+    ResidencePermit residencePermit = 2;
+    InternalPassport internalPassport = 3;
+    ForeignPassport foreignPassport = 4;
+    EResidentPassport eResidentPassport = 5;
+  }
+}
+
+message TaxpayerCard {
+  int32 status = 1;
+  string number = 2;
+  string creationDate = 3;
+}
+
+message TaxpayerCardInDocument {
+  string name = 1;
+  string value = 2;
+  int32 status = 3;
+  string statusDescription = 4;
+}
+
+message DocumentTicker {
+  string type = 1;
+  string text = 2;
+}
+
+enum PassportType {
+  ID = 0;
+  P = 1;
+}
+
+message ResidencePermit {
+  string id = 1;
+  string docNumber = 2;
+  string number = 3;
+  optional string series = 4;
+  string firstNameUA = 5;
+  string lastNameUA = 6;
+  string firstNameEN = 7;
+  string lastNameEN = 8;
+  string recordNumber = 9;
+  string gender = 10;
+  string birthday = 11;
+  string issueDate = 12;
+  string expirationDate = 13;
+  string authority = 14;
+  string issueReason = 15;
+  int32 issueCode = 16;
+  repeated string nationality = 17;
+  repeated ResidencePermitNationality nationalities = 18;
+  string birthCountry = 19;
+  optional string registration = 20;
+  optional ResidencePermitRegistrationInfo registrationInfo = 21;
+  string sign = 22;
+  string photo = 23;
+  optional TaxpayerCard taxpayerCard = 24;
+  optional string rnokpp = 25;
+}
+
+message InternalPassport {
+  // DocumentMetaData
+  int32 docStatus = 1;
+  string docNumber = 2;
+  optional string docSubtype = 3;
+  optional ua.gov.diia.types.documents.OwnerType ownerType = 4;
+  optional google.protobuf.Timestamp registrationDate = 5;
+  optional string expirationDate = 6;
+  optional DocumentTicker tickerOptions = 7;
+  optional string fullNameHash = 8;
+  // BasePassportInstance
+  string id = 9;
+  optional string series = 10;
+  string number = 11;
+  string genderUA = 12;
+  string genderEN = 13;
+  string nationalityUA = 14;
+  string nationalityEN = 15;
+  string lastNameUA = 16;
+  string lastNameEN = 17;
+  string firstNameUA = 18;
+  string firstNameEN = 19;
+  string middleNameUA = 20;
+  string birthday = 21;
+  string birthPlaceUA = 22;
+  string birthPlaceEN = 23;
+  string issueDate = 24;
+  string recordNumber = 25;
+  optional TaxpayerCard taxpayerCard = 26;
+  string photo = 27;
+  string sign = 28;
+  PassportType type = 29;
+  string documentRegistrationPlaceUA = 30;
+  string currentRegistrationPlaceUA = 31;
+  optional string shareLocalization = 32;
+  // InternalPassportInstance
+  string department = 33;
+}
+
+message ForeignPassportInstanceDetails {
+  message Card {
+    string name = 1;
+    string icon = 2;
+    string lastName = 3;
+    string firstName = 4;
+    optional string middleName = 5;
+    ua.gov.diia.types.documents.NameValue birthDate = 6;
+    ua.gov.diia.types.documents.NameValue docNumber = 7;
+  }
+  Card card = 1;
+  string name = 2;
+  string icon = 3;
+  string country = 4;
+  ua.gov.diia.types.documents.NameValue docNumber = 5;
+  string lastName = 6;
+  string firstName = 7;
+  ua.gov.diia.types.documents.NameValue gender = 8;
+  ua.gov.diia.types.documents.NameValue birthDate = 9;
+  ua.gov.diia.types.documents.NameValue nationality = 10;
+  ua.gov.diia.types.documents.NameValue department = 11;
+  ua.gov.diia.types.documents.NameValue issueDate = 12;
+  ua.gov.diia.types.documents.NameValue expiryDate = 13;
+  ua.gov.diia.types.documents.NameValue identifier = 14;
+  ua.gov.diia.types.documents.NameValue type = 15;
+  ua.gov.diia.types.documents.NameValue countryCode = 16;
+  optional TaxpayerCardInDocument taxpayer = 17;
+  ua.gov.diia.types.documents.NameValue birthPlace = 18;
+  ua.gov.diia.types.documents.NameValue residenceRegistrationPlace = 19;
+  ua.gov.diia.types.documents.NameValue registrationDate = 20;
+  optional DocumentTicker tickerOptions = 21;
+}
+
+message ForeignPassport {
+  // DocumentMetaData
+  int32 docStatus = 1;
+  string docNumber = 2;
+  optional string docSubtype = 3;
+  optional ua.gov.diia.types.documents.OwnerType ownerType = 4;
+  optional google.protobuf.Timestamp registrationDate = 5;
+  optional string expirationDate = 6;
+  optional DocumentTicker tickerOptions = 7;
+  optional string fullNameHash = 8;
+  // BasePassportInstance
+  string id = 9;
+  optional string series = 10;
+  string number = 11;
+  string genderUA = 12;
+  string genderEN = 13;
+  string nationalityUA = 14;
+  string nationalityEN = 15;
+  string lastNameUA = 16;
+  string lastNameEN = 17;
+  string firstNameUA = 18;
+  string firstNameEN = 19;
+  string middleNameUA = 20;
+  string birthday = 21;
+  string birthPlaceUA = 22;
+  string birthPlaceEN = 23;
+  string issueDate = 24;
+  string recordNumber = 25;
+  optional TaxpayerCard taxpayerCard = 26;
+  string photo = 27;
+  string sign = 28;
+  PassportType type = 29;
+  string documentRegistrationPlaceUA = 30;
+  string currentRegistrationPlaceUA = 31;
+  optional string shareLocalization = 32;
+  // ForeignPassportInstance
+  string departmentUA = 33;
+  string departmentEN = 34;
+  string typeUA = 35;
+  string typeEN = 36;
+  string countryCode = 37;
+  optional ForeignPassportInstanceDetails ua = 38;
+  optional ForeignPassportInstanceDetails eng = 39;
+}
+
+message EResidentPassport {
+  // DocumentMetaData
+  int32 docStatus = 1;
+  string docNumber = 2;
+  optional string docSubtype = 3;
+  optional ua.gov.diia.types.documents.OwnerType ownerType = 4;
+  optional google.protobuf.Timestamp registrationDate = 5;
+  optional string expirationDate = 6;
+  optional DocumentTicker tickerOptions = 7;
+  optional string fullNameHash = 8;
+  // BasePassportInstance
+  string id = 9;
+  optional string series = 10;
+  string number = 11;
+  string genderUA = 12;
+  string genderEN = 13;
+  string nationalityUA = 14;
+  string nationalityEN = 15;
+  string lastNameUA = 16;
+  string lastNameEN = 17;
+  string firstNameUA = 18;
+  string firstNameEN = 19;
+  string middleNameUA = 20;
+  string birthday = 21;
+  string birthPlaceUA = 22;
+  string birthPlaceEN = 23;
+  string issueDate = 24;
+  string recordNumber = 25;
+  optional TaxpayerCard taxpayerCard = 26;
+  string photo = 27;
+  string sign = 28;
+  PassportType type = 29;
+  string documentRegistrationPlaceUA = 30;
+  string currentRegistrationPlaceUA = 31;
+  optional string shareLocalization = 32;
+  // ForeignPassportInstance
+  string departmentUA = 33;
+  string departmentEN = 34;
+  string typeUA = 35;
+  string typeEN = 36;
+  string countryCode = 37;
+  optional ForeignPassportInstanceDetails ua = 38;
+  optional ForeignPassportInstanceDetails eng = 39;
+  // EResidentPassportInstance
+  optional string residenceCityUA = 40;
+  optional string residenceCountryCodeAlpha2 = 41;
+}
+
+message ResidencePermitRegistrationInfo {
+  optional string city = 1;
+  optional string index = 2;
+  optional string regionName = 3;
+  optional string flatNumber = 4;
+  optional string houseNumber = 5;
+  optional string streetName = 6;
+  optional string streetType = 7;
+}
+
+message ResidencePermitNationality {
+  string codeAlfa3 = 1;
+  string name = 2;
+}

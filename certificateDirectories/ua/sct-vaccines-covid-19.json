@@ -1,0 +1,48 @@
+{
+    "valueSetId": "sct-vaccines-covid-19-ua",
+    "valueSetDate": "2021-04-27",
+    "valueSetValues": {
+        "1119349007": {
+            "display": "Вакцина від коронавірусної хвороби на платформі мРНК",
+            "lang": "ua",
+            "active": true,
+            "version": "http://snomed.info/sct/900000000000207008/version/20210131",
+            "system": "http://snomed.info/sct"
+        },
+        "1119305005": {
+            "display": "SARS-CoV-2 antigen vaccine",
+            "lang": "ua",
+            "active": true,
+            "version": "http://snomed.info/sct/900000000000207008/version/20210131",
+            "system": "http://snomed.info/sct"
+        },
+        "J07BX03": {
+            "display": "Вакцина від коронавірусної хвороби (будь-яка платформа)",
+            "lang": "ua",
+            "active": true,
+            "version": "2021-01",
+            "system": "http://www.whocc.no/atc"
+        },
+        "1162643001": {
+            "display": "Вакцина від коронавірусної хвороби на платформі білкової субодиниці",
+            "lang": "ua",
+            "active": true,
+            "version": "2022-01-31",
+            "system": "http://snomed.info/sct"
+        },
+        "1157024006": {
+            "display": "Вакцина від коронавірусної хвороби на платформі інактивованого вірусу",
+            "lang": "ua",
+            "active": true,
+            "version": "2022-01-31",
+            "system": "http://snomed.info/sct"
+        },
+        "29061000087103": {
+            "display": "Вакцина від коронавірусної хвороби на платформі вірусного вектора без здатності до реплікації",
+            "lang": "ua",
+            "active": true,
+            "version": "2022-01-31",
+            "system": "http://snomed.info/sct"
+        }
+    }
+}
