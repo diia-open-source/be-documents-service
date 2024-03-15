@@ -26,7 +26,7 @@ This repository contains the service which provides acquiring of citizen documen
 Example:
 
 ```
-git clone https://github.com/diia-open-source/documents-service.git
+git clone https://github.com/diia-open-source/be-documents-service.git documents-service
 ```
 
 ---
