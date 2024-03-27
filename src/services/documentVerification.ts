@@ -1,4 +1,4 @@
-import { v4 as uuidv4 } from 'uuid'
+import { randomUUID as uuid } from 'node:crypto'
 
 import { PluginDepsCollection } from '@diia-inhouse/diia-app'
 
@@ -333,7 +333,7 @@ export default class DocumentVerificationService {
     }
 
     private prepareDataToPersist(): { hash: string; expirationDate: Date; expirationSec: number } {
-        const hash = uuidv4()
+        const hash = uuid()
         const expirationMs = this.config.app.documentVerificationLinkExpirationMS
         const expirationDate = new Date(Date.now() + expirationMs)
 
