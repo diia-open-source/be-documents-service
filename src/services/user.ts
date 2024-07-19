@@ -1,10 +1,11 @@
 import { MoleculerService } from '@diia-inhouse/diia-app'
 
-import { EventBus, InternalEvent } from '@diia-inhouse/diia-queue'
-import { ActionVersion, AppUserActionHeaders, DocumentType, Logger, ProfileFeature, UserFeatures } from '@diia-inhouse/types'
+import { EventBus } from '@diia-inhouse/diia-queue'
+import { ActionVersion, AppUserActionHeaders, Logger, ProfileFeature, UserFeatures } from '@diia-inhouse/types'
 
 import DocumentsDataMapper from '@dataMappers/documentsDataMapper'
 
+import { InternalEvent } from '@interfaces/queue'
 import { DocumentDecryptedDataByDocumentType } from '@interfaces/services/cryptData'
 import { CommonDocument } from '@interfaces/services/documents'
 import {
@@ -17,8 +18,6 @@ import {
     HasDocumentsResult,
     HasStorageDocumentParams,
     ProcessUserDocumentsParams,
-    UserDocumentsOrderParams,
-    UserDocumentsOrderResponse,
     UserProfileAddDocumentMessage,
     UserProfileAddDocumentPhotoMessage,
     UserProfileAddDocumentsMessage,
@@ -36,22 +35,9 @@ export default class UserService {
         private readonly documentsDataMapper: DocumentsDataMapper,
     ) {}
 
-    async getDocumentsOrder(params: UserDocumentsOrderParams): Promise<UserDocumentsOrderResponse[]> {
-        return await this.moleculer.act(
-            this.serviceName,
-            {
-                name: 'getDocumentsOrder',
-                actionVersion: ActionVersion.V1,
-            },
-            {
-                params: params,
-            },
-        )
-    }
-
     async addDocumentInStorage(
         userIdentifier: string,
-        documentType: DocumentType,
+        documentType: string,
         hashData: string | undefined,
         encryptedData: string,
         mobileUid?: string,
@@ -94,7 +80,7 @@ export default class UserService {
         )
     }
 
-    async removeFromStorageByHashData(userIdentifier: string, documentType: DocumentType, hashData: string): Promise<void> {
+    async removeFromStorageByHashData(userIdentifier: string, documentType: string, hashData: string): Promise<void> {
         return await this.moleculer.act(
             this.serviceName,
             {
@@ -107,7 +93,7 @@ export default class UserService {
         )
     }
 
-    async hasOneOfDocuments(userIdentifier: string, documentTypes: DocumentType[]): Promise<boolean> {
+    async hasOneOfDocuments(userIdentifier: string, documentTypes: string[]): Promise<boolean> {
         return await this.moleculer.act(
             this.serviceName,
             { name: 'hasOneOfDocuments', actionVersion: ActionVersion.V1 },
@@ -208,7 +194,7 @@ export default class UserService {
         )
     }
 
-    async processUserDocuments(params: ProcessUserDocumentsParams): Promise<[DocumentType, DocumentType][]> {
+    async processUserDocuments(params: ProcessUserDocumentsParams): Promise<[string, string][]> {
         return await this.moleculer.act(
             this.serviceName,
             {
@@ -236,7 +222,7 @@ export default class UserService {
 
     async saveDocumentInUserProfile(
         userIdentifier: string,
-        documentType: DocumentType,
+        documentType: string,
         document: CommonDocument | undefined,
         headers: AppUserActionHeaders,
     ): Promise<void> {

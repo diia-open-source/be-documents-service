@@ -1,6 +1,6 @@
 import { AppAction } from '@diia-inhouse/diia-app'
 
-import { ActionVersion, DocumentType, SessionType } from '@diia-inhouse/types'
+import { ActionVersion, SessionType } from '@diia-inhouse/types'
 import { ValidationSchema } from '@diia-inhouse/validators'
 
 import DocumentVerificationService from '@services/documentVerification'
@@ -9,6 +9,7 @@ import Utils from '@utils/index'
 
 import { CustomActionArguments } from '@interfaces/actions/v1/verifyInternalPassport'
 import { InternalPassportInstance } from '@interfaces/providers/eis'
+import { PassportDocumentType } from '@interfaces/services/passport'
 
 export default class VerifyInternalPassportAction implements AppAction {
     constructor(
@@ -35,7 +36,7 @@ export default class VerifyInternalPassportAction implements AppAction {
 
         return await this.documentVerificationService.verifyDocument({
             otp,
-            documentType: DocumentType.InternalPassport,
+            documentType: PassportDocumentType.InternalPassport,
             token,
             representative: this.appUtils.collectRepresentative(user),
         })

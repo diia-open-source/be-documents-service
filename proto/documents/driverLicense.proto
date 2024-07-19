@@ -1,0 +1,93 @@
+syntax = "proto3";
+
+import "google/protobuf/timestamp.proto";
+
+import "documents/nameValue.proto";
+import "documents/documentData.proto";
+
+import "document.proto";
+
+package ua.gov.diia.document;
+option java_multiple_files = true;
+option java_package = "ua.gov.diia.document";
+
+enum LicenseType {
+  permanent = 0;
+  issuedFirst = 1;
+}
+
+message DriverLicense {
+  string id = 1;
+  string docNumber = 2;
+  optional LicenseType type = 3;
+  string clientId = 4;
+  string serial = 5;
+  string number = 6;
+  string issueDate = 7;
+  string expirationDate = 8;
+  string categories = 9;
+  repeated DriverLicenseCategory categoriesFull = 10;
+  string serialNumber = 11;
+  string lastNameUA = 12;
+  string firstNameUA = 13;
+  string middleNameUA = 14;
+  string lastNameEN = 15;
+  string firstNameEN = 16;
+  optional string birthday = 17;
+  optional string birthPlace = 18;
+  optional string departmentId = 19;
+  optional string department = 20;
+  string photo = 21;
+  optional string recordNumber = 22;
+  optional ua.gov.diia.document.Localization shareLocalization = 23;
+  optional DriverLicenseDetails ua = 24;
+  optional DriverLicenseDetails eng = 25;
+  // DocumentMetaData
+  int32 docStatus = 26;
+  optional string docSubtype = 27;
+  optional ua.gov.diia.types.documents.OwnerType ownerType = 28;
+  optional google.protobuf.Timestamp registrationDate = 29;
+  optional ua.gov.diia.document.DocumentTicker tickerOptions = 30;
+  optional string fullNameHash = 31;
+}
+
+message DriverLicenseCategory {
+  string category = 1;
+  string openDate = 2;
+}
+
+message DriverLicenseCategoryDetails {
+  ua.gov.diia.types.documents.NameValueWithCode category = 1;
+  ua.gov.diia.types.documents.NameValueWithCode openingDate = 2;
+}
+
+message DriverLicenseDetails {
+  message Card {
+    string name = 1;
+    string icon = 2;
+    string lastName = 3;
+    string firstName = 4;
+    optional string middleName = 5;
+    ua.gov.diia.types.documents.NameValue birthDate = 6;
+    ua.gov.diia.types.documents.NameValue category = 7;
+    ua.gov.diia.types.documents.NameValue documentNumber = 8;
+  }
+
+  Card card = 1;
+  string name = 2;
+  string icon = 3;
+  string country = 4;
+  ua.gov.diia.types.documents.NameValueWithCode lastName = 5;
+  ua.gov.diia.types.documents.NameValueWithCode firstName = 6;
+  ua.gov.diia.types.documents.NameValueWithCode birthDate = 7;
+  ua.gov.diia.types.documents.NameValueWithCode birth = 8;
+  ua.gov.diia.types.documents.NameValueWithCode issueDate = 9;
+  ua.gov.diia.types.documents.NameValueWithCode expiryDate = 10;
+  ua.gov.diia.types.documents.NameValueWithCode department = 11;
+  ua.gov.diia.types.documents.NameValueWithCode identifier = 12;
+  ua.gov.diia.types.documents.NameValueWithCode documentNumber = 13;
+  ua.gov.diia.types.documents.NameValueWithCode category = 14;
+  ua.gov.diia.types.documents.NameValueWithCode categoryOpeningDate = 15;
+  repeated DriverLicenseCategoryDetails categories = 16;
+  optional ua.gov.diia.document.DocumentTicker tickerOptions = 17;
+}

@@ -8,7 +8,15 @@ import DocumentsService from '@services/documents'
 import { ActionResult, CustomActionArguments } from '@interfaces/actions/v1/getDocumentsToProcess'
 
 export default class GetDocumentsToProcessAction implements AppAction {
-    constructor(private readonly documentsService: DocumentsService) {}
+    constructor(private readonly documentsService: DocumentsService) {
+        this.validationRules = {
+            filter: {
+                type: 'array',
+                items: { type: 'string', enum: <string[]>(<unknown>this.documentsService.documentFilters) },
+                optional: true,
+            },
+        }
+    }
 
     readonly sessionType: SessionType = SessionType.User
 
@@ -16,13 +24,7 @@ export default class GetDocumentsToProcessAction implements AppAction {
 
     readonly name: string = 'getDocumentsToProcess'
 
-    readonly validationRules: ValidationSchema<CustomActionArguments['params']> = {
-        filter: {
-            type: 'array',
-            items: { type: 'string', enum: <string[]>(<unknown>this.documentsService.documentFilters) },
-            optional: true,
-        },
-    }
+    readonly validationRules: ValidationSchema<CustomActionArguments['params']>
 
     async handler(args: CustomActionArguments): Promise<ActionResult> {
         const {

@@ -1,8 +1,9 @@
+import { DateTime } from 'luxon'
 import moment from 'moment'
 
 import { IdentifierService } from '@diia-inhouse/crypto'
 import { BadRequestError, InternalServerError } from '@diia-inhouse/errors'
-import { AppUser, AuthDocumentType, DocumentType, Logger, OwnerType, PortalUserTokenData } from '@diia-inhouse/types'
+import { AppUser, AuthDocumentType, Logger, OwnerType, PortalUserTokenData } from '@diia-inhouse/types'
 
 import { AppConfig } from '@interfaces/config'
 import { Person, Representative } from '@interfaces/providers/eis'
@@ -37,6 +38,14 @@ export default class Utils {
 
     convertIsoToDate(isoString: string): Date | undefined {
         return moment(isoString).isValid() ? moment(isoString).toDate() : undefined
+    }
+
+    convertAppDateToIso(dateString: string | undefined): string | undefined {
+        return dateString ? moment(dateString, this.config.app.dateFormat).toISOString() : undefined
+    }
+
+    getIsoDateStrict(dateString: string): string | undefined {
+        return DateTime.fromISO(dateString).isValid ? dateString : undefined
     }
 
     throwInternalExceptionOnError(err: Error): never {
@@ -82,11 +91,11 @@ export default class Utils {
             if ([AuthDocumentType.IdCard, AuthDocumentType.PaperInternalPassport].includes(<AuthDocumentType>document?.type)) {
                 validPassport = document.value
             }
-        } else if (passport) {
-            // backward compatibility for old tokens
-            if (/^\d{9}$/.test(passport) || /^[а-я]{2}\d{6}$/i.test(passport)) {
-                validPassport = passport
-            }
+        } else if (
+            passport && // backward compatibility for old tokens
+            (/^\d{9}$/.test(passport) || /^[а-я]{2}\d{6}$/i.test(passport))
+        ) {
+            validPassport = passport
         }
 
         return validPassport
@@ -142,13 +151,13 @@ export default class Utils {
     }
 
     createFullNameHash(lastName: string, firstName: string, middleName?: string): string {
-        const preparedFullName = `${lastName}${firstName}${middleName}`.toLowerCase().replace(/[^а-щьюяґєії]/g, '')
+        const preparedFullName = `${lastName}${firstName}${middleName}`.toLowerCase().replaceAll(/[^а-щьюяєіїґ]/g, '')
 
         return this.identifier.createIdentifier(preparedFullName)
     }
 
     getStorageDataByDocumentTypes<T extends AvailableDocumentDecryptedData>(
-        documentType: DocumentType | undefined,
+        documentType: string | undefined,
         storageDataByDocumentTypes: DocumentDecryptedDataByDocumentType | undefined,
     ): T[] {
         if (!documentType || !storageDataByDocumentTypes) {
@@ -211,7 +220,7 @@ export default class Utils {
     }
 
     private assertIsAvailableDocumentTypeToEncrypt(
-        documentType: DocumentType,
+        documentType: string,
         storageDataByDocumentTypes: DocumentDecryptedDataByDocumentType,
     ): boolean {
         return documentType in storageDataByDocumentTypes

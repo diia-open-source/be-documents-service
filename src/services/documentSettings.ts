@@ -1,17 +1,46 @@
-import { FilterQuery } from 'mongoose'
+import { FilterQuery } from '@diia-inhouse/db'
+import { Logger } from '@diia-inhouse/types'
+import { DocumentVisibilitySettingsItem } from '@diia-inhouse/user-service-client'
 
-import { DocumentType, Logger } from '@diia-inhouse/types'
+import UserDocumentSettingsService from '@services/userDocumentSettings'
 
 import documentSettingModel from '@models/documentSetting'
 
 import { DocumentSettingModel, DocumentSettingVersion, ExpirationType } from '@interfaces/models/documentSetting'
 
 export default class DocumentSettingsService {
-    constructor(private readonly logger: Logger) {}
+    constructor(
+        private readonly logger: Logger,
+        private readonly userDocumentSettingsService: UserDocumentSettingsService,
+    ) {}
 
     private documentSettings: Map<string, DocumentSettingModel> = new Map()
 
-    async getDocumentExpirationTime(type: DocumentType, expirationType: ExpirationType, version: DocumentSettingVersion): Promise<number> {
+    async isDocumentTypeHidden(
+        documentType: string,
+        documentsSettings: DocumentSettingModel[],
+        userDocumentVisibilitySetting?: DocumentVisibilitySettingsItem,
+    ): Promise<boolean> {
+        const documentSetting = documentsSettings.find(({ type }) => type === documentType)
+        if (!documentSetting) {
+            return false
+        }
+
+        const { defaultHidden = false } = documentSetting
+        const userSettingsValue = this.userDocumentSettingsService.isDocumentTypeHidden(userDocumentVisibilitySetting)
+
+        if (!userDocumentVisibilitySetting || userSettingsValue === undefined) {
+            return defaultHidden
+        }
+
+        return Boolean(userDocumentVisibilitySetting.hiddenDocumentType)
+    }
+
+    async getDocumentsSettings(version = DocumentSettingVersion.V1): Promise<DocumentSettingModel[]> {
+        return await documentSettingModel.find({ version })
+    }
+
+    async getDocumentExpirationTime(type: string, expirationType: ExpirationType, version: DocumentSettingVersion): Promise<number> {
         const key = `${type}:${version}`
         const cachedDocumentSetting = this.documentSettings.get(key)
         if (cachedDocumentSetting) {

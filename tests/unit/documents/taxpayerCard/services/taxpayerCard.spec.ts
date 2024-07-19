@@ -4,43 +4,48 @@ import TestKit, { mockInstance } from '@diia-inhouse/test'
 import {
     ActionCode,
     DocStatus,
-    DocumentInstance,
-    DocumentType,
-    ForeignPassportInstanceDetails,
     IconAtmActionType,
     Localization,
     OwnerType,
-    TaxpayerCard,
     TickerAtm,
     TickerAtmType,
     TickerAtmUsage,
 } from '@diia-inhouse/types'
 
 import TaxpayerCardDataMapper from '@src/documents/taxpayerCard/dataMappers/document'
-import { GetTaxpayerCardResponse } from '@src/documents/taxpayerCard/interfaces/services/taxpayer'
+import TaxpayerCardPdfDataMapper from '@src/documents/taxpayerCard/dataMappers/documentPdf'
+import { DocumentType, GetTaxpayerCardResponse, TaxpayerCard } from '@src/documents/taxpayerCard/interfaces/services'
 import DocumentsDrfoServiceProvider from '@src/documents/taxpayerCard/providers/drfo'
 import TaxpayerCardService from '@src/documents/taxpayerCard/services/document'
+import { ForeignPassportInstanceDetails } from '@src/generated'
 
 import UserService from '@services/user'
 
+import { InternalPassportInstance } from '@interfaces/providers/eis'
+import { DocumentInstance } from '@interfaces/services'
 import { GetDocumentsResult } from '@interfaces/services/documents'
 import { AssertStrategyParams, VerifyOtpResponse } from '@interfaces/services/documentVerification'
+import { PassportDocumentType } from '@interfaces/services/passport'
 
 describe('TaxpayerCardService', () => {
     const testKit = new TestKit()
     const documentsDrfoServiceProviderMock = mockInstance(DocumentsDrfoServiceProvider)
     const taxPayerCardDataMapperMock = mockInstance(TaxpayerCardDataMapper)
+    const taxPayerCardPdfDataMapperMock = mockInstance(TaxpayerCardPdfDataMapper)
     const userServiceMock = mockInstance(UserService)
     const logger = mockInstance(Logger)
     const taxpayerCardService = new TaxpayerCardService(
+        logger,
+        userServiceMock,
         documentsDrfoServiceProviderMock,
         taxPayerCardDataMapperMock,
-        userServiceMock,
-        logger,
+        taxPayerCardPdfDataMapperMock,
     )
     const { user } = testKit.session.getUserSession()
-    const { identifier: userIdentifier } = user
-    const { id, docNumber, lastNameUA, firstNameUA, middleNameUA, birthday, creationDate, docStatus } = testKit.docs.getTaxpayerCard()
+    const { identifier: userIdentifier, itn } = user
+    const { id, docNumber, lastNameUA, firstNameUA, middleNameUA, birthday, creationDate, docStatus } = <TaxpayerCard>(
+        testKit.docs.generateDocument(DocumentType.TaxpayerCard)
+    )
     const taxpayerCardDto = {
         card: {
             isVisible: true,
@@ -124,7 +129,7 @@ describe('TaxpayerCardService', () => {
         const getDocumentsParams = {
             user,
             documentType: DocumentType.TaxpayerCard,
-            itn: user.itn,
+            itn,
             designSystem: true,
             context: {},
         }
@@ -133,11 +138,13 @@ describe('TaxpayerCardService', () => {
             const { card, expirationTime } = taxpayerCardDto
             const docName = 'Картка платника податків'
             const fullNameUa = `${lastNameUA} ${firstNameUA} ${middleNameUA}`
-            const tickerAtm = <TickerAtm>{
+            const tickerAtm: TickerAtm = {
                 type: TickerAtmType.positive,
                 usage: TickerAtmUsage.document,
                 value: 'value',
+                componentId: expect.any(String),
             }
+
             const expectedTaxpayerCardInstance = <DocumentInstance>{
                 docStatus,
                 id,
@@ -250,7 +257,6 @@ describe('TaxpayerCardService', () => {
 
     describe('method getTaxpayerCardTableOrg', () => {
         it('should successfully return taxpayer card TableOrg', async () => {
-            const { itn } = user
             const expectedResult = {
                 items: [],
             }
@@ -268,7 +274,7 @@ describe('TaxpayerCardService', () => {
     describe('method enrichDocumentWithTaxpayerCard', () => {
         it('should successfully identity document with taxpayer card', () => {
             const { card } = taxpayerCardDto
-            const idCard = testKit.docs.getInternalPassport()
+            const idCard = <InternalPassportInstance>testKit.docs.generateDocument(PassportDocumentType.InternalPassport)
             const taxpayerUa = {
                 name: 'РНОКПП (ІПН)',
                 status: docStatus,

@@ -21,6 +21,6 @@ export default class HasValidTaxpayerCardAction implements AppAction {
 
         const card = await this.taxpayerCardService.getValidTaxpayerCard(user)
 
-        return !!card
+        return Boolean(card)
     }
 }

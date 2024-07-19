@@ -7,6 +7,9 @@ import PassportService from '@services/passport'
 
 import PassportDataMapper from '@dataMappers/passportDataMapper'
 
+import { InternalPassportInstance } from '@interfaces/providers/eis'
+import { PassportDocumentType } from '@interfaces/services/passport'
+
 describe(`Action ${CheckPassportAction.name}`, () => {
     const testKit = new TestKit()
     const documentsServiceMock = mockInstance(DocumentsService)
@@ -22,7 +25,7 @@ describe(`Action ${CheckPassportAction.name}`, () => {
             headers,
         }
 
-        const mockPassport = testKit.docs.getInternalPassport()
+        const mockPassport = <InternalPassportInstance>testKit.docs.generateDocument(PassportDocumentType.InternalPassport)
 
         jest.spyOn(passportServiceMock, 'getPassportToProcess').mockResolvedValueOnce(mockPassport)
         jest.spyOn(documentsServiceMock, 'handlePhotoForDocumentToProcess').mockResolvedValueOnce()

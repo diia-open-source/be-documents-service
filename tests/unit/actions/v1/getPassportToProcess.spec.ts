@@ -27,6 +27,7 @@ describe(`Action ${GetPassportToProcessAction.name}`, () => {
             session,
         }
 
+        // eslint-disable-next-line unicorn/no-useless-undefined
         jest.spyOn(passportService, 'getPassportToProcess').mockResolvedValueOnce(undefined)
 
         await expect(action.handler(args)).rejects.toThrow(new NotFoundError('Passports not found'))

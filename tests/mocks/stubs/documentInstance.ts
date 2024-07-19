@@ -1,5 +1,4 @@
-import { DocumentInstance } from '@diia-inhouse/types'
-
+import { DocumentInstance } from '@interfaces/services'
 import { CommonDocument } from '@interfaces/services/documents'
 
 export const getDocumentInstance = (document: CommonDocument): DocumentInstance => {

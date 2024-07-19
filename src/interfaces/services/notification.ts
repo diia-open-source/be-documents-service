@@ -1,4 +1,4 @@
-import { ObjectId } from 'mongodb'
+import { ObjectId } from '@diia-inhouse/db'
 
 export enum TemplateStub {
     ApplicationId = 'APPLICATION_ID',

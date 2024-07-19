@@ -1,7 +1,5 @@
 import { v4 as uuidv4 } from 'uuid'
 
-import { PluginDepsCollection } from '@diia-inhouse/diia-app'
-
 import {
     AnalyticsActionResult,
     AnalyticsActionType,
@@ -10,8 +8,10 @@ import {
 } from '@diia-inhouse/analytics'
 import { AuthService } from '@diia-inhouse/crypto'
 import { ApiError, BadRequestError, DocumentNotFoundError, NotFoundError } from '@diia-inhouse/errors'
-import { ActHeaders, DocStatus, DocumentInstance, DocumentType, Localization, Logger, OwnerType, UserTokenData } from '@diia-inhouse/types'
+import { ActHeaders, DocStatus, Localization, Logger, OnRegistrationsFinished, OwnerType, UserTokenData } from '@diia-inhouse/types'
 import { utils } from '@diia-inhouse/utils'
+
+import { ShareDocumentRes } from '@src/generated'
 
 import AnalyticsService from '@services/analytics'
 import DocumentsExpirationService from '@services/documentsExpiration'
@@ -22,47 +22,41 @@ import DocumentVerificationDataMapper from '@dataMappers/documentVerificationDat
 
 import { AppConfig } from '@interfaces/config'
 import { DocumentVerificationOtp, DocumentVerificationOtpModel } from '@interfaces/models/documentVerificationOtp'
-import { AnalyticsCategory as ServiceAnalyticsCategory } from '@interfaces/services'
-import { CommonDocument, Document, DocumentService } from '@interfaces/services/documents'
+import { DocumentInstance, AnalyticsCategory as ServiceAnalyticsCategory } from '@interfaces/services'
+import { AnyDocumentService, CommonDocument, Document } from '@interfaces/services/documents'
 import {
-    AssertParams,
     AssertStrategy,
+    DocumentAssertParams,
     DocumentTypeDefinerByQrCodeStrategy,
     GetValidatedVerificationRecordResult,
     ShareLinkParams,
     ShareLinkResponse,
+    ShareSettings,
+    ShareSettingsStrategy,
     StillValidResult,
     VerificationByDataStrategy,
     VerificationData,
     VerificationStrategy,
     VerifyDocumentParams,
 } from '@interfaces/services/documentVerification'
+import { PassportDocumentType } from '@interfaces/services/passport'
 
-export default class DocumentVerificationService {
-    private readonly assertStrategies: Partial<Record<DocumentType, AssertStrategy>> = {
-        [DocumentType.ForeignPassport]: this.passportService.assertDocumentIsValid.bind(this.passportService),
-        [DocumentType.InternalPassport]: this.passportService.assertDocumentIsValid.bind(this.passportService),
-    }
+export default class DocumentVerificationService implements OnRegistrationsFinished {
+    private readonly assertStrategies: Record<string, AssertStrategy>
 
-    private readonly verifyStrategies: Partial<Record<DocumentType, VerificationStrategy>> = {
-        [DocumentType.ForeignPassport]: this.passportService.verifyForeignPassport.bind(this.passportService),
-        [DocumentType.InternalPassport]: this.passportService.verifyInternalPassport.bind(this.passportService),
-    }
+    private readonly verifyStrategies: Record<string, VerificationStrategy>
 
-    private readonly validDocStatusesByDocumentType: Partial<Record<DocumentType, DocStatus[]>> = {}
+    private readonly shareSettingsStrategies: Record<string, ShareSettingsStrategy> = {}
 
-    private readonly timerTextByLocalization: Record<Localization, string> = {
-        [Localization.UA]: 'Код діятиме ще',
-        [Localization.ENG]: 'The code will expire in',
-    }
+    private readonly validDocStatusesByDocumentType: Record<string, DocStatus[]> = {}
 
     private readonly defineDocumentTypeByQrCodeStrategies: DocumentTypeDefinerByQrCodeStrategy[] = []
 
-    private readonly verifyByDataStrategies: Partial<Record<DocumentType, VerificationByDataStrategy>> = {}
+    private readonly verifyByDataStrategies: Record<string, VerificationByDataStrategy> = {}
 
     constructor(
         private readonly analyticsService: AnalyticsService,
-        private readonly documentServices: PluginDepsCollection<DocumentService>,
+        private readonly documentServices: Partial<AnyDocumentService>[],
         private readonly documentsExpirationService: DocumentsExpirationService,
         private readonly documentVerificationOtpService: DocumentVerificationOtpService,
         private readonly passportService: PassportService,
@@ -74,28 +68,64 @@ export default class DocumentVerificationService {
         private readonly auth: AuthService,
         private readonly logger: Logger,
     ) {
-        this.loadPluginDeps(this.documentServices.items)
-        this.documentServices.on('newItems', (instances) => this.loadPluginDeps(instances))
+        this.assertStrategies = {
+            [PassportDocumentType.ForeignPassport]: this.passportService.assertDocumentIsValid.bind(this.passportService),
+            [PassportDocumentType.InternalPassport]: this.passportService.assertDocumentIsValid.bind(this.passportService),
+        }
+        this.verifyStrategies = {
+            [PassportDocumentType.ForeignPassport]: this.passportService.verifyForeignPassport.bind(this.passportService),
+            [PassportDocumentType.InternalPassport]: this.passportService.verifyInternalPassport.bind(this.passportService),
+        }
     }
 
-    async generateOtpLink({
-        documentType,
-        documentId,
-        headers,
-        userIdentifier,
-        documentAssertParams,
-        generateBarcode = false,
-        localization = Localization.UA,
-    }: ShareLinkParams): Promise<ShareLinkResponse> {
+    onRegistrationsFinished(): void {
+        for (const service of this.documentServices) {
+            const {
+                documentTypes = [],
+                assertDocumentIsValid,
+                verifyDocument,
+                verifyDocumentByData,
+                defineDocumentTypeByQrCode,
+                validDocStatusesByDocumentType = {},
+                getShareSettings,
+            } = service
+
+            for (const documentType of documentTypes) {
+                Object.assign(this.assertStrategies, assertDocumentIsValid ? { [documentType]: assertDocumentIsValid.bind(service) } : {})
+                Object.assign(this.verifyStrategies, verifyDocument ? { [documentType]: verifyDocument.bind(service) } : {})
+                Object.assign(
+                    this.verifyByDataStrategies,
+                    verifyDocumentByData ? { [documentType]: verifyDocumentByData.bind(service) } : {},
+                )
+                Object.assign(this.shareSettingsStrategies, getShareSettings ? { [documentType]: getShareSettings.bind(service) } : {})
+            }
+
+            Object.assign(this.validDocStatusesByDocumentType, validDocStatusesByDocumentType)
+
+            if (defineDocumentTypeByQrCode) {
+                this.defineDocumentTypeByQrCodeStrategies.push(defineDocumentTypeByQrCode)
+            }
+        }
+    }
+
+    async generateOtpLink(shareLinkParams: ShareLinkParams): Promise<ShareLinkResponse> {
+        const { documentType, documentId, headers, user, features, serieNumber, localization = Localization.UA } = shareLinkParams
+
         this.logger.info('Start generating OTP link', { documentType })
 
         const { mobileUid, token } = headers
-        const { ownerType, docStatus }: StillValidResult = await this.assertDocumentIsValid(
+        const { identifier: userIdentifier } = user
+        const { generateBarcode, checkExpirationDocumentType = documentType } = this.getShareSettingByStrategy(documentType)
+
+        const documentAssertParams: DocumentAssertParams = { user, features, serieNumber }
+
+        const { ownerType, docStatus } = await this.assertDocumentIsValid(
             documentId,
             documentType,
             mobileUid,
             userIdentifier,
             documentAssertParams,
+            checkExpirationDocumentType,
         )
         const { expirationDate, expirationSec, hash } = this.prepareDataToPersist()
 
@@ -112,6 +142,7 @@ export default class DocumentVerificationService {
             expirationDate,
             localization,
         }
+
         const verificationOtp = await this.documentVerificationOtpService.create(data, generateBarcode)
         const docVerificationLink = this.buildDocumentVerificationLink(documentType, documentId, hash)
 
@@ -131,8 +162,26 @@ export default class DocumentVerificationService {
             id: verificationOtp.id,
             link: docVerificationLink,
             barcode: verificationOtp.barcode,
-            timerText: this.timerTextByLocalization[localization],
+            timerText: this.documentVerificationDataMapper.timerTextByLocalization[localization],
             timerTime: expirationSec,
+        }
+    }
+
+    async getOtpShareResponse(shareLinkParams: ShareLinkParams): Promise<ShareDocumentRes> {
+        const { documentType, documentId, headers, user, features, serieNumber, localization = Localization.UA } = shareLinkParams
+
+        const shareDocumentResult = await this.generateOtpLink({
+            documentType,
+            documentId,
+            headers,
+            user,
+            features,
+            serieNumber,
+            localization: <Localization>localization,
+        })
+
+        return {
+            verificationCodesOrg: this.documentVerificationDataMapper.toShareOtpResponse(shareDocumentResult, <Localization>localization),
         }
     }
 
@@ -187,7 +236,7 @@ export default class DocumentVerificationService {
         }
     }
 
-    async verifyDocumentByBarcode(documentType: DocumentType, barcode: string): Promise<Document> {
+    async verifyDocumentByBarcode(documentType: string, barcode: string): Promise<Document> {
         const verifyOTPResponse = await this.documentVerificationOtpService.verifyOTPByBarcode(barcode, '')
 
         const verificator = this.verifyStrategies[documentType]
@@ -199,7 +248,7 @@ export default class DocumentVerificationService {
         return <Document>await verificator(verifyOTPResponse, { documentType })
     }
 
-    async getDocumentByBarcode(documentType: DocumentType, barcode: string): Promise<Document> {
+    async getDocumentByBarcode(documentType: string, barcode: string): Promise<Document> {
         const verification = await this.documentVerificationOtpService.findByKey({ barcode })
 
         if (!verification) {
@@ -253,18 +302,24 @@ export default class DocumentVerificationService {
         return await this.getValidatedVerificationRecord(record)
     }
 
+    private getShareSettingByStrategy(documentType: string): ShareSettings {
+        const shareSettingsStrategy = this.shareSettingsStrategies[documentType]
+
+        return shareSettingsStrategy ? shareSettingsStrategy(documentType) : { generateBarcode: true }
+    }
+
     private async assertDocumentIsValid(
         documentId: string,
-        documentType: DocumentType,
+        documentType: string,
         mobileUid: string,
         userIdentifier: string,
-        documentAssertParams: AssertParams,
+        documentAssertParams: DocumentAssertParams,
+        checkExpirationDocumentType: string,
     ): Promise<StillValidResult> {
-        if ([DocumentType.InternalPassport, DocumentType.ForeignPassport].includes(documentType)) {
+        if ([<string>PassportDocumentType.InternalPassport, <string>PassportDocumentType.ForeignPassport].includes(documentType)) {
             return { isStillValid: true, docStatus: DocStatus.Ok, ownerType: OwnerType.owner }
         }
 
-        const { checkExpirationDocumentType = documentType } = documentAssertParams
         const stillValidResult: StillValidResult = await this.checkIsDocumentStillValid(
             mobileUid,
             userIdentifier,
@@ -340,7 +395,7 @@ export default class DocumentVerificationService {
         return { hash, expirationDate, expirationSec: Math.round(expirationMs / 1000) }
     }
 
-    private buildDocumentVerificationLink(documentType: DocumentType, docId: string, hash: string): string {
+    private buildDocumentVerificationLink(documentType: string, docId: string, hash: string): string {
         return `https://diia.app/documents/${documentType}/${docId}/verify/${hash}`
     }
 
@@ -348,7 +403,7 @@ export default class DocumentVerificationService {
         mobileUid: string,
         userIdentifier: string,
         documentId: string,
-        documentType: DocumentType,
+        documentType: string,
     ): Promise<StillValidResult> {
         this.logger.info('Start checking is document still valid', { documentId, documentType })
 
@@ -380,35 +435,9 @@ export default class DocumentVerificationService {
         return { isStillValid: currentDate <= expirationDate, ownerType, docStatus: value }
     }
 
-    private isDocStatusValid(documentType: DocumentType, docStatus: DocStatus): boolean {
+    private isDocStatusValid(documentType: string, docStatus: DocStatus): boolean {
         const validStatuses = this.validDocStatusesByDocumentType[documentType] || [DocStatus.Ok]
 
         return validStatuses.includes(docStatus)
-    }
-
-    private loadPluginDeps(instances: DocumentService[]): void {
-        instances.forEach((service) => {
-            const {
-                documentTypes,
-                assertDocumentIsValid,
-                verifyDocument,
-                verifyDocumentByData,
-                defineDocumentTypeByQrCode,
-                validDocStatusesByDocumentType = {},
-            } = service
-
-            documentTypes.forEach((documentType) => {
-                Object.assign(this.assertStrategies, assertDocumentIsValid ? { [documentType]: assertDocumentIsValid.bind(service) } : {})
-                Object.assign(this.verifyStrategies, verifyDocument ? { [documentType]: verifyDocument.bind(service) } : {})
-                Object.assign(
-                    this.verifyByDataStrategies,
-                    verifyDocumentByData ? { [documentType]: verifyDocumentByData.bind(service) } : {},
-                )
-            })
-            Object.assign(this.validDocStatusesByDocumentType, validDocStatusesByDocumentType)
-            if (defineDocumentTypeByQrCode) {
-                this.defineDocumentTypeByQrCodeStrategies.push(defineDocumentTypeByQrCode)
-            }
-        })
     }
 }

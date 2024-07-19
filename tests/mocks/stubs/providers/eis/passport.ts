@@ -1,9 +1,11 @@
 import { merge } from 'lodash'
 import { PartialDeep } from 'type-fest'
 
+import { PassportType } from '@src/generated'
+
 import photo from '@tests/mocks/stubs/photo'
 
-import { PassportGenderEN, PassportType, RegistryPassportDTO } from '@interfaces/dto'
+import { PassportGenderEN, RegistryPassportDTO } from '@interfaces/dto'
 
 export function getPassport(data: PartialDeep<RegistryPassportDTO> = {}): RegistryPassportDTO {
     return merge<RegistryPassportDTO, typeof data>(

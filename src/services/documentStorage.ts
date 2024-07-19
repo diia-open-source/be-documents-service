@@ -1,5 +1,4 @@
 import { CryptoService, DocumentDecryptedData } from '@diia-inhouse/crypto'
-import { DocumentType } from '@diia-inhouse/types'
 
 import UserService from '@services/user'
 
@@ -12,7 +11,7 @@ export default class DocumentStorageService {
 
     async encryptDataAndSaveInStorage(
         userIdentifier: string,
-        documentType: DocumentType,
+        documentType: string,
         dataToEncrypt: DocumentDecryptedData,
         mobileUid?: string,
     ): Promise<void> {
@@ -21,7 +20,7 @@ export default class DocumentStorageService {
         await this.userService.addDocumentInStorage(userIdentifier, documentType, hashData, encryptedData, mobileUid)
     }
 
-    async removeFromStorage(identifier: string, documentType: DocumentType, dataToEncrypt: DocumentDecryptedData): Promise<void> {
+    async removeFromStorage(identifier: string, documentType: string, dataToEncrypt: DocumentDecryptedData): Promise<void> {
         const hashData = this.crypto.generateHashData(dataToEncrypt)
 
         return await this.userService.removeFromStorageByHashData(identifier, documentType, hashData)

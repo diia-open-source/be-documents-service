@@ -1,13 +1,13 @@
-import { DocumentType, Documents, UserActionArguments } from '@diia-inhouse/types'
+import { UserActionArguments } from '@diia-inhouse/types'
 
-import { GetDocumentToProcessOptions } from '@interfaces/services/documents'
+import { CommonDocument, Documents, GetDocumentToProcessOptions } from '@interfaces/services/documents'
 
 export interface CustomActionArguments extends UserActionArguments {
     params: {
-        documentTypes: DocumentType[]
+        documentTypes: string[]
         ignoreCache?: boolean
         queries?: GetDocumentToProcessOptions
     }
 }
 
-export type ActionResult = Documents
+export type ActionResult = Documents<CommonDocument>

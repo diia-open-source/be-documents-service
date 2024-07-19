@@ -1,7 +1,7 @@
 import TestKit, { mockInstance } from '@diia-inhouse/test'
-import { DocumentType } from '@diia-inhouse/types'
 
 import VerifyDriverLicenseAction from '@src/documents/driverLicense/actions/v1/verifyDriverLicense'
+import { DocumentType, DriverLicense } from '@src/documents/driverLicense/interfaces/services'
 
 import DocumentVerificationService from '@services/documentVerification'
 
@@ -20,7 +20,7 @@ describe(`Action ${VerifyDriverLicenseAction.name}`, () => {
             headers: { ...headers, token: 'token' },
         }
 
-        const driversLicense = testKit.docs.getDriverLicense()
+        const driversLicense = <DriverLicense>testKit.docs.generateDocument(DocumentType.DriverLicense)
 
         jest.spyOn(documentVerificationService, 'verifyDocument').mockResolvedValueOnce(driversLicense)
 

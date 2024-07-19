@@ -6,9 +6,6 @@ import {
     ActionCode,
     DocStatus,
     DocumentFullInfoItem,
-    DocumentInstance,
-    DocumentType,
-    DocumentTypeCamelCase,
     FrontCardItem,
     HeadingWithSubtitlesMlc,
     IconAtmActionType,
@@ -18,7 +15,7 @@ import {
 } from '@diia-inhouse/types'
 import { utils } from '@diia-inhouse/utils'
 
-import { PassportRegistration, PassportRegistrationInfo } from '@src/generated'
+import { ForeignPassportInstanceDetails, PassportRegistration, PassportRegistrationInfo, PassportType } from '@src/generated'
 
 import DocumentAttributesService from '@services/documentAttributes'
 
@@ -33,7 +30,6 @@ import {
     CountryCode,
     PassportGenderEN,
     PassportGenderUA,
-    PassportType,
     RegistryPassportDTO,
     RegistryPassportInstance,
     RegistryPassportRegistration,
@@ -42,7 +38,6 @@ import {
     BasePassportInstance,
     ForeignPassportFrontCardInfo,
     ForeignPassportInstance,
-    ForeignPassportInstanceDetails,
     InternalPassportInstance,
     NationalityEN,
     NationalityUA,
@@ -50,19 +45,21 @@ import {
     PassportFull,
 } from '@interfaces/providers/eis'
 import { RegistrationAddress } from '@interfaces/providers/usdr'
+import { DocumentInstance } from '@interfaces/services'
 import { DocumentTickerCode } from '@interfaces/services/documentAttributes'
 import { DefaultValue, DocumentMediaAlias } from '@interfaces/services/documents'
+import { PassportDocumentType, PassportDocumentTypeCamelCase } from '@interfaces/services/passport'
 
 // TODO(BACK-2386): migrate to strategies approach
 export default class PassportDataMapper {
-    readonly mapPassportTypeToIdentityDocumentType: Record<PassportType, DocumentType> = {
-        [PassportType.ID]: DocumentType.InternalPassport,
-        [PassportType.P]: DocumentType.ForeignPassport,
+    readonly mapPassportTypeToIdentityDocumentType: Record<PassportType, PassportDocumentType> = {
+        [PassportType.ID]: PassportDocumentType.InternalPassport,
+        [PassportType.P]: PassportDocumentType.ForeignPassport,
     }
 
-    readonly passportTypeToDocumentType: Record<PassportType, DocumentType> = {
-        [PassportType.ID]: DocumentType.InternalPassport,
-        [PassportType.P]: DocumentType.ForeignPassport,
+    readonly passportTypeToDocumentType: Record<PassportType, PassportDocumentType> = {
+        [PassportType.ID]: PassportDocumentType.InternalPassport,
+        [PassportType.P]: PassportDocumentType.ForeignPassport,
     }
 
     private readonly defaultValueByLocalization: Record<Localization, DefaultValue> = {
@@ -125,7 +122,7 @@ export default class PassportDataMapper {
 
     toDocumentInstanceV1(passport: RegistryPassportDTO): Passport[] {
         const passportEntities = this.mapPassports(passport)
-        if (!passportEntities.length) {
+        if (passportEntities.length === 0) {
             throw new DocumentNotFoundError()
         }
 
@@ -139,15 +136,31 @@ export default class PassportDataMapper {
         const registration = this.toRegistration(passport)
 
         const extendedPassports = filteredRawDocuments.map((document): DocumentInstance | undefined => {
-            const { date_issue: dateIssueRaw, date_expiry: dateExpireRaw, photo, type: passportType } = document
+            const {
+                date_issue: dateIssueRaw,
+                date_expiry: dateExpireRaw,
+                photo,
+                type: passportType,
+                dep_issue: depIssue,
+                signature,
+                middle_name: middleName,
+                birth_place: birthPlace,
+                middle_name_en: middleNameEn,
+                first_name_en: firstNameEn,
+                last_name_en: lastNameEn,
+                last_name: lastName,
+                first_name: firstName,
+            } = document
 
             const docNumber = document.number?.toUpperCase()
 
-            const namePartsUa = [document.last_name, document.first_name, document.middle_name]
+            const namePartsUa = [lastName, firstName, middleName]
             const [lastNameUa, firstNameUa, middleNameUa] = namePartsUa.map((name) => utils.capitalizeName(name))
 
-            const namePartsEn = [document.last_name_en, document.first_name_en, document.middle_name_en]
-            const [lastNameEn, firstNameEn, middleNameEn] = namePartsEn.map((name) => utils.capitalizeName(name))
+            const namePartsEn = [lastNameEn, firstNameEn, middleNameEn]
+            const [capitalizedLastNameEn, capitalizedFirstNameEn, capitalizedMiddleNameEn] = namePartsEn.map((name) =>
+                utils.capitalizeName(name),
+            )
 
             if (!this.isValidDocument(dateIssueRaw, dateExpireRaw, docNumber, lastNameUa, firstNameUa, photo)) {
                 return
@@ -171,8 +184,8 @@ export default class PassportDataMapper {
                 middleNameUa,
                 '\n',
             )
-            const fullNameEn = utils.getFullName(lastNameEn, firstNameEn, middleNameEn)
-            const fullNameEnWithSeparator = utils.getFullName(lastNameEn, firstNameEn, middleNameEn, '\n')
+            const fullNameEn = utils.getFullName(capitalizedLastNameEn, capitalizedFirstNameEn, capitalizedMiddleNameEn)
+            const fullNameEnWithSeparator = utils.getFullName(capitalizedLastNameEn, capitalizedFirstNameEn, capitalizedMiddleNameEn, '\n')
 
             const genderUa = this.genderEnToUa(gender)
             const genderEn = gender || ''
@@ -181,7 +194,7 @@ export default class PassportDataMapper {
                 this.appUtils.convertDate(date),
             )
 
-            const [birthPlaceUa] = this.parseBirthPlace(document.birth_place)
+            const [birthPlaceUa] = this.parseBirthPlace(birthPlace)
 
             const frontCardInfoUa: ForeignPassportFrontCardInfo = {
                 docNumber,
@@ -209,7 +222,7 @@ export default class PassportDataMapper {
                         code: DocumentMediaAlias.Photo,
                     },
                     {
-                        image: document.signature,
+                        image: signature,
                         code: DocumentMediaAlias.Signature,
                     },
                 ],
@@ -217,7 +230,7 @@ export default class PassportDataMapper {
                     docName: this.docNameByTypeMap[passportType][Localization.UA],
                     birthday: birthDate || DefaultValue.NotProvided,
                     fullName,
-                    fullNameHash: this.appUtils.createFullNameHash(lastNameUa, firstNameUa, document.middle_name),
+                    fullNameHash: this.appUtils.createFullNameHash(lastNameUa, firstNameUa, middleName),
                     expirationDate,
                     dataIssued: issueDate,
                 },
@@ -318,7 +331,7 @@ export default class PassportDataMapper {
                                     tableItemHorizontalMlc: {
                                         label: 'Орган, що видав:',
                                         secondaryLabel: 'Authority',
-                                        value: document.dep_issue || DefaultValue.NotProvided,
+                                        value: depIssue || DefaultValue.NotProvided,
                                     },
                                 },
                             ],
@@ -329,10 +342,14 @@ export default class PassportDataMapper {
                     },
                     ...this.getUnzrBlock(unzr, passportType, birthPlaceUa, registration),
                     ...this.getLocationBlock(passportType, registration),
+                    {
+                        verificationCodesOrg: {},
+                    },
                 ],
             }
         })
 
+        // eslint-disable-next-line unicorn/prefer-native-coercion-functions
         return extendedPassports.filter((item): item is DocumentInstance => Boolean(item))
     }
 
@@ -403,7 +420,7 @@ export default class PassportDataMapper {
             currentRegistration += `.\nДата реєстрації: ${parsedRegistration.registrationDate}`
         }
 
-        documents.forEach((item: RegistryPassportInstance) => {
+        for (const item of documents) {
             let passportEntity: Passport
             const [birthPlaceUA, birthPlaceEN]: [string, string] = this.parseBirthPlace(item.birth_place)
             const docNumber: string = item.number?.toUpperCase()
@@ -411,7 +428,7 @@ export default class PassportDataMapper {
             const firstNameUA: string = utils.capitalizeName(item.first_name)
 
             if (!this.isValidDocument(item.date_issue, item.date_expiry, docNumber, lastNameUA, firstNameUA, item.photo)) {
-                return
+                continue
             }
 
             const basePassportInstance: BasePassportInstance = {
@@ -460,7 +477,7 @@ export default class PassportDataMapper {
                     typeEN: passportType,
                     countryCode: CountryCode.Ukr,
                     tickerOptions: this.documentAttributesService.getTickerV1(
-                        DocumentType.ForeignPassport,
+                        PassportDocumentType.ForeignPassport,
                         DocumentTickerCode.ValidOnlyInUkraine,
                     ),
                 }
@@ -468,11 +485,11 @@ export default class PassportDataMapper {
                 passportEntity.ua = this.toForeignPassportLocaleDetails(document, passportEntity, parsedRegistration, Localization.UA)
                 passportEntity.eng = this.toForeignPassportLocaleDetails(document, passportEntity, parsedRegistration, Localization.ENG)
             } else {
-                return
+                continue
             }
 
             passportEntities.push(passportEntity)
-        })
+        }
 
         if (passportTypeFilter) {
             return passportEntities.filter((passport: Passport) => passport.type === passportTypeFilter)
@@ -481,8 +498,8 @@ export default class PassportDataMapper {
         return passportEntities
     }
 
-    findIdCard(passports: Passport[]): InternalPassportInstance {
-        return <InternalPassportInstance>passports.find((doc: Passport) => doc.type === PassportType.ID)
+    findIdCard(passports: Passport[]): InternalPassportInstance | undefined {
+        return passports.find((doc): doc is InternalPassportInstance => doc.type === PassportType.ID)
     }
 
     findForeignPassports(passports: Passport[], { sortByDate = false }: FindForeignPassportsOps = {}): ForeignPassportInstance[] {
@@ -517,7 +534,7 @@ export default class PassportDataMapper {
 
         const passport: PassportFull = {
             data: documents
-                .filter((item: RegistryPassportInstance) => !!item.photo && isBase64(item.photo))
+                .filter((item: RegistryPassportInstance) => Boolean(item.photo) && isBase64(item.photo))
                 .map((item: RegistryPassportInstance) => ({
                     rnokpp,
                     type: item.type,
@@ -568,7 +585,7 @@ export default class PassportDataMapper {
     }
 
     extractUnzr(id: string): string {
-        return id.substring(0, 14)
+        return id.slice(0, 14)
     }
 
     private toPassportRegistration(registration: RegistryPassportRegistration): PassportRegistration {
@@ -623,7 +640,12 @@ export default class PassportDataMapper {
             return
         }
 
-        return searchStrings.reduce((result, searchString) => result.replace(searchString, ''), name).trim()
+        let result = name
+        for (const searchString of searchStrings) {
+            result = result.replace(searchString, '')
+        }
+
+        return result.trim()
     }
 
     private toForeignPassportLocaleDetails(
@@ -656,7 +678,7 @@ export default class PassportDataMapper {
         } = passport
         const defaultValue = this.defaultValueByLocalization[localization]
 
-        const icon = this.documentAttributesService.getTrident(DocumentType.ForeignPassport)
+        const icon = this.documentAttributesService.getTrident(PassportDocumentType.ForeignPassport)
         const birthday = this.appUtils.convertDate(dateBirth) || defaultValue
         const recordNumber = unzr || defaultValue
         const residenceRegistrationPlace = address?.registrationAddress || defaultValue
@@ -767,12 +789,12 @@ export default class PassportDataMapper {
         const { docNumber, ticker, fullName, birthDate } = data
         const docName = this.docNameByTypeMapWithSeparator[passportType][locale]
 
-        const passportToDocTypeMap: Record<PassportType, DocumentTypeCamelCase> = {
-            [PassportType.ID]: DocumentTypeCamelCase.idCard,
-            [PassportType.P]: DocumentTypeCamelCase.foreignPassport,
+        const passportToDocTypeMap: Record<PassportType, PassportDocumentTypeCamelCase> = {
+            [PassportType.ID]: PassportDocumentTypeCamelCase.IdCard,
+            [PassportType.P]: PassportDocumentTypeCamelCase.ForeignPassport,
         }
 
-        return this.designSystemDataMapper.getFrontCardWithPhotoDefault(
+        return this.designSystemDataMapper.getFrontCard(
             docName,
             passportToDocTypeMap[passportType],
             fullName,
@@ -802,7 +824,7 @@ export default class PassportDataMapper {
                     },
                 },
             ],
-            locale,
+            { locale },
         )
     }
 
@@ -810,12 +832,12 @@ export default class PassportDataMapper {
         const { docNumber, ticker, fullName, birthDate } = data
         const docName = this.docNameByTypeMapWithSeparator[passportType][locale]
 
-        const passportToDocTypeMap: Record<PassportType, DocumentTypeCamelCase> = {
-            [PassportType.ID]: DocumentTypeCamelCase.idCard,
-            [PassportType.P]: DocumentTypeCamelCase.foreignPassport,
+        const passportToDocTypeMap: Record<PassportType, PassportDocumentTypeCamelCase> = {
+            [PassportType.ID]: PassportDocumentTypeCamelCase.IdCard,
+            [PassportType.P]: PassportDocumentTypeCamelCase.ForeignPassport,
         }
 
-        return this.designSystemDataMapper.getFrontCardWithPhotoDefault(
+        return this.designSystemDataMapper.getFrontCard(
             docName,
             passportToDocTypeMap[passportType],
             fullName,
@@ -838,8 +860,7 @@ export default class PassportDataMapper {
                     },
                 },
             ],
-            locale,
-            true,
+            { locale, withEllipseMenu: false },
         )
     }
 

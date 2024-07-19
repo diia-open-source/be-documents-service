@@ -1,8 +1,9 @@
 import { ExternalCommunicator } from '@diia-inhouse/diia-queue'
 import TestKit from '@diia-inhouse/test'
-import { DocumentType, SessionType } from '@diia-inhouse/types'
+import { SessionType } from '@diia-inhouse/types'
 
 import GetIdentityDocumentAction from '@src/actions/v2/getIdentityDocument'
+import { PassportType } from '@src/generated'
 
 import DocumentsService from '@services/documents'
 import UserService from '@services/user'
@@ -11,7 +12,7 @@ import { getPassport } from '@tests/mocks/stubs/providers/eis/passport'
 import { getApp } from '@tests/utils/getApp'
 
 import { ActionResult } from '@interfaces/actions/v2/getIdentityDocument'
-import { PassportType } from '@interfaces/dto'
+import { PassportDocumentType } from '@interfaces/services/passport'
 
 describe(`Action ${GetIdentityDocumentAction.name}`, () => {
     const testKit = new TestKit()
@@ -54,7 +55,7 @@ describe(`Action ${GetIdentityDocumentAction.name}`, () => {
         // Assert
         expect(result).toEqual<ActionResult>({
             identityDocument: expect.objectContaining({
-                identityType: DocumentType.InternalPassport,
+                identityType: PassportDocumentType.InternalPassport,
                 type: PassportType.ID,
             }),
         })

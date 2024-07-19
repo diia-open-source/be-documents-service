@@ -1,8 +1,10 @@
-import { ExternalCommunicator, ExternalEvent } from '@diia-inhouse/diia-queue'
+import { ExternalCommunicator } from '@diia-inhouse/diia-queue'
 import TestKit from '@diia-inhouse/test'
-import { DocumentType, Documents, HttpStatusCode } from '@diia-inhouse/types'
+import { HttpStatusCode } from '@diia-inhouse/types'
 
 import GetDocumentsToProcessByItnAction from '@src/actions/v1/getDocumentsToProcessByItn'
+import { ExternalEvent } from '@src/documents/driverLicense/interfaces/config'
+import { DocumentType, DriverLicense } from '@src/documents/driverLicense/interfaces/services'
 import { getDriverLicense } from '@src/documents/driverLicense/providers/hsc/mockData'
 
 import { photo } from '@providers/testData/photo'
@@ -35,7 +37,9 @@ describe(`Action ${GetDocumentsToProcessByItnAction.name}`, () => {
         const itn = '900000499'
         const documentType = DocumentType.DriverLicense
         const registryResponse = getDriverLicense()
-        const expectedDocument = testKit.docs.getDriverLicense({ id: `${registryResponse.driverLicense[0].id}`, photo })
+        const expectedDocument = <DriverLicense>(
+            testKit.docs.generateDocument(DocumentType.DriverLicense, { id: `${registryResponse.driverLicense[0].id}`, photo })
+        )
 
         const receiveSpy = jest.spyOn(external, 'receiveDirect').mockResolvedValueOnce(registryResponse)
 
@@ -47,7 +51,7 @@ describe(`Action ${GetDocumentsToProcessByItnAction.name}`, () => {
 
         // Assert
         expect(receiveSpy).toHaveBeenCalledWith(ExternalEvent.RepoDocumentDriverLicense, { rnokpp: itn }, {})
-        expect(result).toMatchObject<Documents<typeof documentType>>({
+        expect(result).toMatchObject({
             [documentType]: {
                 status: HttpStatusCode.OK,
                 data: [expectedDocument],

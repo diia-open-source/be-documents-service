@@ -1,9 +1,9 @@
 import { MoleculerService } from '@diia-inhouse/diia-app'
 
 import { IdentifierService } from '@diia-inhouse/crypto'
-import { EventBus, ExternalCommunicator, ExternalEvent, InternalEvent, Task } from '@diia-inhouse/diia-queue'
+import { EventBus, ExternalCommunicator, Task } from '@diia-inhouse/diia-queue'
 import TestKit from '@diia-inhouse/test'
-import { ActionVersion, DocumentType } from '@diia-inhouse/types'
+import { ActionVersion } from '@diia-inhouse/types'
 
 import CheckPassportAction from '@src/actions/v1/checkPassport'
 
@@ -12,6 +12,8 @@ import { getApp } from '@tests/utils/getApp'
 
 import { AppConfig } from '@interfaces/config'
 import { Person, Representative } from '@interfaces/providers/eis'
+import { ExternalEvent, InternalEvent } from '@interfaces/queue'
+import { PassportDocumentType } from '@interfaces/services/passport'
 import { ServiceTask } from '@interfaces/tasks'
 import { EventPayload } from '@interfaces/tasks/publishAdultRegistrationAddressCommunity'
 
@@ -60,7 +62,7 @@ describe(`Action ${CheckPassportAction.name}`, () => {
 
         jest.spyOn(external, 'receiveDirect').mockResolvedValueOnce(passportEisSuccessResponse)
         jest.spyOn(moleculer, 'act').mockResolvedValueOnce({
-            documents: [{ documentType: DocumentType.InternalPassport, documentIdentifier: 'other-document-identifier' }],
+            documents: [{ documentType: PassportDocumentType.InternalPassport, documentIdentifier: 'other-document-identifier' }],
         })
 
         // Act
@@ -105,13 +107,13 @@ describe(`Action ${CheckPassportAction.name}`, () => {
         )
         expect(eventBus?.publish).toHaveBeenCalledWith(InternalEvent.DocumentsAddDocumentPhoto, {
             userIdentifier,
-            documentType: DocumentType.InternalPassport,
+            documentType: PassportDocumentType.InternalPassport,
             documentIdentifier,
             photo: idCard.photo,
         })
         expect(eventBus?.publish).toHaveBeenCalledWith(InternalEvent.DocumentsRemoveDocumentPhoto, {
             userIdentifier,
-            documentType: DocumentType.InternalPassport,
+            documentType: PassportDocumentType.InternalPassport,
             documentIdentifier: 'other-document-identifier',
         })
     })
@@ -131,7 +133,7 @@ describe(`Action ${CheckPassportAction.name}`, () => {
 
         jest.spyOn(external, 'receiveDirect').mockResolvedValueOnce({ ...passportEisSuccessResponse, documents: [foreignPassport] })
         jest.spyOn(moleculer, 'act').mockResolvedValueOnce({
-            documents: [{ documentType: DocumentType.ForeignPassport, documentIdentifier: 'other-document-identifier' }],
+            documents: [{ documentType: PassportDocumentType.ForeignPassport, documentIdentifier: 'other-document-identifier' }],
         })
 
         // Act
@@ -176,13 +178,13 @@ describe(`Action ${CheckPassportAction.name}`, () => {
         )
         expect(eventBus?.publish).toHaveBeenCalledWith(InternalEvent.DocumentsAddDocumentPhoto, {
             userIdentifier,
-            documentType: DocumentType.ForeignPassport,
+            documentType: PassportDocumentType.ForeignPassport,
             documentIdentifier,
             photo: foreignPassport.photo,
         })
         expect(eventBus?.publish).toHaveBeenCalledWith(InternalEvent.DocumentsRemoveDocumentPhoto, {
             userIdentifier,
-            documentType: DocumentType.ForeignPassport,
+            documentType: PassportDocumentType.ForeignPassport,
             documentIdentifier: 'other-document-identifier',
         })
     })

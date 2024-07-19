@@ -43,7 +43,7 @@ export default class CheckPassportAction implements AppAction {
         }
 
         return {
-            exists: !!passport,
+            exists: Boolean(passport),
         }
     }
 }

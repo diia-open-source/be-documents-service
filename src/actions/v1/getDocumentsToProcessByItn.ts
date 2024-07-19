@@ -1,6 +1,6 @@
 import { AppAction } from '@diia-inhouse/diia-app'
 
-import { ActionVersion, DocumentType, SessionType } from '@diia-inhouse/types'
+import { ActionVersion, SessionType } from '@diia-inhouse/types'
 import { ValidationSchema } from '@diia-inhouse/validators'
 
 import DocumentsService from '@services/documents'
@@ -8,7 +8,13 @@ import DocumentsService from '@services/documents'
 import { ActionResult, CustomActionArguments } from '@interfaces/actions/v1/getDocumentsToProcessByItn'
 
 export default class GetDocumentsToProcessByItnAction implements AppAction {
-    constructor(private readonly documentsService: DocumentsService) {}
+    constructor(private readonly documentsService: DocumentsService) {
+        this.validationRules = {
+            itn: { type: 'string' },
+            documentTypes: { type: 'array', unique: true, items: { type: 'string', enum: this.documentsService.documentTypes } },
+            ignoreCache: { type: 'boolean', optional: true },
+        }
+    }
 
     readonly sessionType: SessionType = SessionType.None
 
@@ -16,11 +22,7 @@ export default class GetDocumentsToProcessByItnAction implements AppAction {
 
     readonly name: string = 'getDocumentsToProcessByItn'
 
-    readonly validationRules: ValidationSchema<CustomActionArguments['params']> = {
-        itn: { type: 'string' },
-        documentTypes: { type: 'array', unique: true, items: { type: 'string', enum: Object.values(DocumentType) } },
-        ignoreCache: { type: 'boolean', optional: true },
-    }
+    readonly validationRules: ValidationSchema<CustomActionArguments['params']>
 
     async handler(args: CustomActionArguments): Promise<ActionResult> {
         const {

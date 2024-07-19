@@ -1,14 +1,16 @@
-import { randomUUID } from 'crypto'
+import { randomUUID } from 'node:crypto'
 
 import * as uuid from 'uuid'
 
 import { EventBus } from '@diia-inhouse/diia-queue'
 import { AccessDeniedError, DocumentNotFoundError } from '@diia-inhouse/errors'
 import TestKit from '@diia-inhouse/test'
-import { DocumentType, DriverLicense, DurationMs } from '@diia-inhouse/types'
+import { DurationMs } from '@diia-inhouse/types'
+import { DocumentOrderSettingsItem, UserServiceClient } from '@diia-inhouse/user-service-client'
 
 import ShareDriverLicenseAction from '@src/documents/driverLicense/actions/v1/shareDriverLicense'
 import { DriverLicenseDocumentDTO } from '@src/documents/driverLicense/interfaces/providers/hsc'
+import { DocumentType, DocumentTypeCamelCase, DriverLicense } from '@src/documents/driverLicense/interfaces/services'
 import DriverLicenseHscProvider from '@src/documents/driverLicense/providers/hsc'
 import { getDriverLicense } from '@src/documents/driverLicense/providers/hsc/mockData'
 
@@ -20,7 +22,7 @@ import documentsExpirationModel from '@models/documentsExpiration'
 
 import { getApp } from '@tests/utils/getApp'
 
-import { DocumentTypeResponse } from '@interfaces/services/documents'
+import { DocumentResponse } from '@interfaces/services/documents'
 import { ShareLinkResponse } from '@interfaces/services/documentVerification'
 
 jest.mock('uuid', () => ({
@@ -36,6 +38,7 @@ describe(`Action ${ShareDriverLicenseAction.name}`, () => {
     let eventBus: EventBus
     let driverLicenseHscProvider: DriverLicenseHscProvider
     let userService: UserService
+    let userServiceClient: UserServiceClient
 
     beforeAll(async () => {
         app = await getApp()
@@ -45,6 +48,7 @@ describe(`Action ${ShareDriverLicenseAction.name}`, () => {
         eventBus = app.container.resolve<EventBus>('eventBus')
         driverLicenseHscProvider = app.container.resolve<DriverLicenseHscProvider>('driverLicenseHscProvider')
         userService = app.container.resolve<UserService>('userService')
+        userServiceClient = app.container.resolve<UserServiceClient>('userServiceClient')
 
         await app.start()
     })
@@ -55,11 +59,14 @@ describe(`Action ${ShareDriverLicenseAction.name}`, () => {
 
     it('should generate share response', async () => {
         const { session, headers } = testKit.session.getUserActionArguments({}, {}, { validItn: true })
-        const userDocumentsOrder = [{ documentType: DocumentType.DriverLicense }]
+        const userDocumentsOrder: DocumentOrderSettingsItem[] = [{ documentType: DocumentType.DriverLicense, documentIdentifiers: [] }]
         const hash = randomUUID()
 
         jest.spyOn(userService, 'checkDocumentsFeaturePoints').mockResolvedValueOnce({ documents: [] })
-        jest.spyOn(userService, 'getDocumentsOrder').mockResolvedValueOnce(userDocumentsOrder)
+        jest.spyOn(userServiceClient, 'getUserDocumentSettings').mockResolvedValueOnce({
+            documentOrderSettings: userDocumentsOrder,
+            documentVisibilitySettings: [],
+        })
         jest.spyOn(eventBus, 'publish').mockResolvedValue(true)
         jest.spyOn(driverLicenseHscProvider, 'getDriverLicense')
             .mockResolvedValueOnce(getDriverLicense())
@@ -70,8 +77,8 @@ describe(`Action ${ShareDriverLicenseAction.name}`, () => {
             headers,
             params: { filter: [DocumentType.DriverLicense] },
         })
-        const driverLicense = documentResponse[<DocumentTypeResponse>'driverLicense']
-        const { id: documentId, serial: serie, number } = <DriverLicense>(<unknown>driverLicense!.data[0])
+        const driverLicense = <DocumentResponse<DriverLicense>>(<unknown>documentResponse[DocumentTypeCamelCase.DriverLicense])
+        const { id: documentId, serial: serie, number } = driverLicense.data[0]
         const params = { documentId, serie, number }
 
         jest.spyOn(uuid, 'v4').mockReturnValueOnce(hash)
@@ -89,14 +96,17 @@ describe(`Action ${ShareDriverLicenseAction.name}`, () => {
 
     it('should generate share response if document expired', async () => {
         const { session, headers } = testKit.session.getUserActionArguments({}, {}, { validItn: true })
-        const userDocumentsOrder = [{ documentType: DocumentType.DriverLicense }]
+        const userDocumentsOrder: DocumentOrderSettingsItem[] = [{ documentType: DocumentType.DriverLicense, documentIdentifiers: [] }]
         const { user } = session
         const { identifier: userIdentifier } = user
         const { mobileUid } = headers
         const hash = randomUUID()
 
         jest.spyOn(userService, 'checkDocumentsFeaturePoints').mockResolvedValueOnce({ documents: [] })
-        jest.spyOn(userService, 'getDocumentsOrder').mockResolvedValueOnce(userDocumentsOrder)
+        jest.spyOn(userServiceClient, 'getUserDocumentSettings').mockResolvedValueOnce({
+            documentOrderSettings: userDocumentsOrder,
+            documentVisibilitySettings: [],
+        })
         jest.spyOn(eventBus, 'publish').mockResolvedValue(true)
         jest.spyOn(driverLicenseHscProvider, 'getDriverLicense')
             .mockResolvedValueOnce(getDriverLicense())
@@ -107,8 +117,8 @@ describe(`Action ${ShareDriverLicenseAction.name}`, () => {
             headers,
             params: { filter: [DocumentType.DriverLicense] },
         })
-        const driverLicense = documentResponse[<DocumentTypeResponse>'driverLicense']
-        const { id: documentId, serial: serie, number } = <DriverLicense>(<unknown>driverLicense!.data[0])
+        const driverLicense = <DocumentResponse<DriverLicense>>(<unknown>documentResponse[DocumentTypeCamelCase.DriverLicense])
+        const { id: documentId, serial: serie, number } = driverLicense.data[0]
         const params = { documentId, serie, number }
 
         await documentsExpirationModel.updateOne(
@@ -131,13 +141,16 @@ describe(`Action ${ShareDriverLicenseAction.name}`, () => {
 
     it('should throw error if document was not found', async () => {
         const { session, headers } = testKit.session.getUserActionArguments({}, {}, { validItn: true })
-        const userDocumentsOrder = [{ documentType: DocumentType.DriverLicense }]
+        const userDocumentsOrder: DocumentOrderSettingsItem[] = [{ documentType: DocumentType.DriverLicense, documentIdentifiers: [] }]
         const { user } = session
         const { identifier: userIdentifier } = user
         const { mobileUid } = headers
 
         jest.spyOn(userService, 'checkDocumentsFeaturePoints').mockResolvedValueOnce({ documents: [] })
-        jest.spyOn(userService, 'getDocumentsOrder').mockResolvedValueOnce(userDocumentsOrder)
+        jest.spyOn(userServiceClient, 'getUserDocumentSettings').mockResolvedValueOnce({
+            documentOrderSettings: userDocumentsOrder,
+            documentVisibilitySettings: [],
+        })
         jest.spyOn(eventBus, 'publish').mockResolvedValue(true)
         jest.spyOn(driverLicenseHscProvider, 'getDriverLicense')
             .mockResolvedValueOnce(getDriverLicense())
@@ -148,8 +161,8 @@ describe(`Action ${ShareDriverLicenseAction.name}`, () => {
             headers,
             params: { filter: [DocumentType.DriverLicense] },
         })
-        const driverLicense = documentResponse[<DocumentTypeResponse>'driverLicense']
-        const { id: documentId, serial: serie, number } = <DriverLicense>(<unknown>driverLicense!.data[0])
+        const driverLicense = <DocumentResponse<DriverLicense>>(<unknown>documentResponse[DocumentTypeCamelCase.DriverLicense])
+        const { id: documentId, serial: serie, number } = driverLicense.data[0]
         const params = { documentId, serie, number }
 
         await documentsExpirationModel.updateOne(
@@ -162,13 +175,16 @@ describe(`Action ${ShareDriverLicenseAction.name}`, () => {
 
     it('should throw error if document id does not match', async () => {
         const { session, headers } = testKit.session.getUserActionArguments({}, {}, { validItn: true })
-        const userDocumentsOrder = [{ documentType: DocumentType.DriverLicense }]
+        const userDocumentsOrder: DocumentOrderSettingsItem[] = [{ documentType: DocumentType.DriverLicense, documentIdentifiers: [] }]
         const { user } = session
         const { identifier: userIdentifier } = user
         const { mobileUid } = headers
 
         jest.spyOn(userService, 'checkDocumentsFeaturePoints').mockResolvedValueOnce({ documents: [] })
-        jest.spyOn(userService, 'getDocumentsOrder').mockResolvedValueOnce(userDocumentsOrder)
+        jest.spyOn(userServiceClient, 'getUserDocumentSettings').mockResolvedValueOnce({
+            documentOrderSettings: userDocumentsOrder,
+            documentVisibilitySettings: [],
+        })
         jest.spyOn(eventBus, 'publish').mockResolvedValue(true)
         jest.spyOn(driverLicenseHscProvider, 'getDriverLicense')
             .mockResolvedValueOnce(getDriverLicense())
@@ -179,8 +195,8 @@ describe(`Action ${ShareDriverLicenseAction.name}`, () => {
             headers,
             params: { filter: [DocumentType.DriverLicense] },
         })
-        const driverLicense = documentResponse[<DocumentTypeResponse>'driverLicense']
-        const { id: documentId, serial: serie, number } = <DriverLicense>(<unknown>driverLicense!.data[0])
+        const driverLicense = <DocumentResponse<DriverLicense>>(<unknown>documentResponse[DocumentTypeCamelCase.DriverLicense])
+        const { id: documentId, serial: serie, number } = driverLicense.data[0]
         const params = { documentId, serie, number }
 
         await documentsExpirationModel.updateOne(

@@ -1,9 +1,11 @@
 import Logger from '@diia-inhouse/diia-logger'
 import { AccessDeniedError, BadRequestError, DocumentNotFoundError, InternalServerError } from '@diia-inhouse/errors'
 import TestKit, { mockInstance } from '@diia-inhouse/test'
-import { DocStatus, DocumentType, DriverLicense, OwnerType } from '@diia-inhouse/types'
+import { DocStatus, OwnerType } from '@diia-inhouse/types'
 
 import DriverLicenseDataMapper from '@src/documents/driverLicense/dataMappers/document'
+import DriverLicencePdfDataMapper from '@src/documents/driverLicense/dataMappers/documentPdf'
+import { DocumentType, DriverLicense } from '@src/documents/driverLicense/interfaces/services'
 import DriverLicenseHscProvider from '@src/documents/driverLicense/providers/hsc'
 import { getDriverLicense } from '@src/documents/driverLicense/providers/hsc/mockData'
 import DriverLicenseService from '@src/documents/driverLicense/services/document'
@@ -12,8 +14,10 @@ import PassportService from '@services/passport'
 
 import { getDocumentInstance } from '@tests/mocks/stubs/documentInstance'
 
+import { InternalPassportInstance } from '@interfaces/providers/eis'
 import { DefaultValue, GetDocumentsResult } from '@interfaces/services/documents'
 import { AssertStrategyParams } from '@interfaces/services/documentVerification'
+import { PassportDocumentType } from '@interfaces/services/passport'
 
 describe(`Service ${DriverLicenseService.name}`, () => {
     const now = new Date()
@@ -21,9 +25,16 @@ describe(`Service ${DriverLicenseService.name}`, () => {
     const logger = mockInstance(Logger)
     const passportService = mockInstance(PassportService)
     const driverLicenseDataMapper = mockInstance(DriverLicenseDataMapper)
+    const driverLicencePdfDataMapper = mockInstance(DriverLicencePdfDataMapper)
     const driverLicenseHscProvider = mockInstance(DriverLicenseHscProvider)
 
-    const service = new DriverLicenseService(logger, passportService, driverLicenseHscProvider, driverLicenseDataMapper)
+    const service = new DriverLicenseService(
+        logger,
+        passportService,
+        driverLicenseHscProvider,
+        driverLicenseDataMapper,
+        driverLicencePdfDataMapper,
+    )
 
     const { user } = testKit.session.getUserSession()
 
@@ -38,7 +49,7 @@ describe(`Service ${DriverLicenseService.name}`, () => {
     describe(`method: ${service.getDriverLicenses.name}`, () => {
         it('should return driver licenses list', async () => {
             const driverLicenseDto = getDriverLicense()
-            const driverLicense = testKit.docs.getDriverLicense()
+            const driverLicense = <DriverLicense>testKit.docs.generateDocument(DocumentType.DriverLicense)
 
             jest.spyOn(driverLicenseHscProvider, 'getDriverLicense').mockResolvedValueOnce(driverLicenseDto)
             jest.spyOn(driverLicenseDataMapper, 'toDocumentInstanceV1').mockReturnValueOnce([driverLicense])
@@ -58,10 +69,10 @@ describe(`Service ${DriverLicenseService.name}`, () => {
                 context: {},
                 user,
             }
-            const internalPassport = testKit.docs.getInternalPassport()
+            const internalPassport = <InternalPassportInstance>testKit.docs.generateDocument(PassportDocumentType.InternalPassport)
             const passport = { ...internalPassport, department: 'department' }
             const driverLicenseDto = getDriverLicense()
-            const driverLicense = testKit.docs.getDriverLicense()
+            const driverLicense = <DriverLicense>testKit.docs.generateDocument(DocumentType.DriverLicense)
             const documentInstance = getDocumentInstance(driverLicense)
 
             jest.spyOn(passportService, 'getPassportsEntityByContext').mockResolvedValueOnce([passport])
@@ -88,10 +99,10 @@ describe(`Service ${DriverLicenseService.name}`, () => {
                 context: {},
                 user,
             }
-            const internalPassport = testKit.docs.getInternalPassport()
+            const internalPassport = <InternalPassportInstance>testKit.docs.generateDocument(PassportDocumentType.InternalPassport)
             const passport = { ...internalPassport, department: 'department' }
             const driverLicenseDto = getDriverLicense()
-            const driverLicense = testKit.docs.getDriverLicense()
+            const driverLicense = <DriverLicense>testKit.docs.generateDocument(DocumentType.DriverLicense)
 
             jest.spyOn(passportService, 'getPassportsEntityByContext').mockResolvedValueOnce([passport])
             jest.spyOn(driverLicenseHscProvider, 'getDriverLicense').mockResolvedValueOnce(driverLicenseDto)
@@ -129,10 +140,10 @@ describe(`Service ${DriverLicenseService.name}`, () => {
                 context: {},
                 user,
             }
-            const internalPassport = testKit.docs.getInternalPassport()
+            const internalPassport = <InternalPassportInstance>testKit.docs.generateDocument(PassportDocumentType.InternalPassport)
             const passport = { ...internalPassport, department: 'department' }
             const driverLicenseDto = getDriverLicense()
-            const driverLicense = testKit.docs.getDriverLicense()
+            const driverLicense = <DriverLicense>testKit.docs.generateDocument(DocumentType.DriverLicense)
 
             jest.spyOn(passportService, 'getPassportsEntityByContext').mockResolvedValueOnce([passport])
             jest.spyOn(driverLicenseHscProvider, 'getDriverLicense').mockResolvedValueOnce(driverLicenseDto)
@@ -170,7 +181,7 @@ describe(`Service ${DriverLicenseService.name}`, () => {
                 documentType: DocumentType.DriverLicense,
                 ownerType: OwnerType.owner,
                 documentAssertParams: {
-                    itn: user.itn,
+                    user: user,
                 },
             }
             const driverLicenseDto = getDriverLicense()
@@ -188,11 +199,11 @@ describe(`Service ${DriverLicenseService.name}`, () => {
                 documentType: DocumentType.DriverLicense,
                 ownerType: OwnerType.owner,
                 documentAssertParams: {
-                    itn: user.itn,
+                    user: user,
                 },
             }
             const driverLicenseDto = getDriverLicense()
-            const driverLicense = testKit.docs.getDriverLicense()
+            const driverLicense = <DriverLicense>testKit.docs.generateDocument(DocumentType.DriverLicense)
 
             jest.spyOn(driverLicenseHscProvider, 'getDriverLicense').mockResolvedValueOnce(driverLicenseDto)
             jest.spyOn(driverLicenseDataMapper, 'toDocumentInstanceV1').mockReturnValueOnce([driverLicense])
@@ -224,14 +235,14 @@ describe(`Service ${DriverLicenseService.name}`, () => {
         })
 
         it('should return driver license with photo', async () => {
-            const driverLicense = testKit.docs.getDriverLicense()
+            const driverLicense = <DriverLicense>testKit.docs.generateDocument(DocumentType.DriverLicense)
             const verifyOtpResponse = {
                 requestor: user,
                 docId: driverLicense.id,
                 ownerType: OwnerType.owner,
                 docStatus: DocStatus.NoPhoto,
             }
-            const internalPassport = testKit.docs.getInternalPassport()
+            const internalPassport = <InternalPassportInstance>testKit.docs.generateDocument(PassportDocumentType.InternalPassport)
             const passport = { ...internalPassport, department: 'department' }
             const driverLicenseDto = getDriverLicense()
 
@@ -246,14 +257,14 @@ describe(`Service ${DriverLicenseService.name}`, () => {
         })
 
         it('should return driver license', async () => {
-            const driverLicense = testKit.docs.getDriverLicense()
+            const driverLicense = <DriverLicense>testKit.docs.generateDocument(DocumentType.DriverLicense)
             const verifyOtpResponse = {
                 requestor: user,
                 docId: driverLicense.id,
                 ownerType: OwnerType.owner,
                 docStatus: DocStatus.Ok,
             }
-            const internalPassport = testKit.docs.getInternalPassport()
+            const internalPassport = <InternalPassportInstance>testKit.docs.generateDocument(PassportDocumentType.InternalPassport)
             const passport = { ...internalPassport, department: 'department' }
             const driverLicenseDto = getDriverLicense()
 

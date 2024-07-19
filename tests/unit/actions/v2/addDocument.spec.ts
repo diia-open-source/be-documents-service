@@ -74,6 +74,7 @@ describe('AddDocumentAction', () => {
             headers,
         })
 
+        // eslint-disable-next-line unicorn/no-useless-undefined
         jest.spyOn(documentsServiceMock, 'addDocument').mockResolvedValueOnce(undefined)
 
         await expect(action.handler(customActionArguments)).resolves.toBeUndefined()

@@ -1,14 +1,21 @@
-import { SetRequired } from 'type-fest'
-
-import { PluginDepsCollection } from '@diia-inhouse/diia-app'
-
-import { ActionCode, AppUser, ArrowedLinkAction, ButtonState, ListItemMlc, Logger, UserTokenData } from '@diia-inhouse/types'
+import {
+    ActionCode,
+    AppUser,
+    ArrowedLinkAction,
+    ButtonState,
+    ListItemMlc,
+    Logger,
+    OnRegistrationsFinished,
+    PlatformAppVersion,
+    UserTokenData,
+} from '@diia-inhouse/types'
+import { utils } from '@diia-inhouse/utils'
 
 import UserService from '@services/user'
 
 import ManualDocumentsListDataMapper from '@dataMappers/manualDocumentsListDataMapper'
 
-import { DocumentService } from '@interfaces/services/documents'
+import { AnyDocumentService } from '@interfaces/services/documents'
 import {
     ManualDocumentListItem,
     ManualDocumentListItemWithOrder,
@@ -18,24 +25,34 @@ import {
 } from '@interfaces/services/manualDocumentsList'
 import { DocumentFilter } from '@interfaces/services/user'
 
-export default class ManualDocumentsListService {
+export default class ManualDocumentsListService implements OnRegistrationsFinished {
     private readonly showInManualListStrategies: Record<string, ShowInManualListStrategy> = {}
 
     constructor(
         private readonly logger: Logger,
 
         private readonly userService: UserService,
-        private readonly documentServices: PluginDepsCollection<DocumentService>,
+        private readonly documentServices: Partial<AnyDocumentService>[],
 
         private readonly manualDocumentsListDataMapper: ManualDocumentsListDataMapper,
-    ) {
-        this.loadPluginDeps(this.documentServices.items)
-        this.documentServices.on('newItems', (instances) => this.loadPluginDeps(instances))
+    ) {}
+
+    onRegistrationsFinished(): void {
+        for (const service of this.documentServices) {
+            const { manualDocumentNames = [], showInManualList } = service
+
+            for (const manualDocumentName of manualDocumentNames) {
+                Object.assign(
+                    this.showInManualListStrategies,
+                    showInManualList ? { [manualDocumentName]: showInManualList.bind(service) } : {},
+                )
+            }
+        }
     }
 
-    async getList(user: UserTokenData): Promise<ManualDocumentsListResponse> {
+    async getList(user: UserTokenData, platformAppVersion: PlatformAppVersion): Promise<ManualDocumentsListResponse> {
         const documents = this.manualDocumentsListDataMapper.getActiveManualDocumentsList()
-        const filteredDocuments = await this.hideUnavailableDocuments(user, documents)
+        const filteredDocuments = await this.hideUnavailableDocuments(user, platformAppVersion, documents)
 
         return {
             contextMenuOrg: {
@@ -63,17 +80,21 @@ export default class ManualDocumentsListService {
     }
 
     /** @deprecated */
-    async getListV1(user: UserTokenData): Promise<ManualDocumentsListResponseV1> {
+    async getListV1(user: UserTokenData, platformAppVersion: PlatformAppVersion): Promise<ManualDocumentsListResponseV1> {
         const documents = this.manualDocumentsListDataMapper.getActiveManualDocumentsList()
-        const filteredDocuments = await this.hideUnavailableDocuments(user, documents)
+        const filteredDocuments = await this.hideUnavailableDocuments(user, platformAppVersion, documents)
 
         return { documents: filteredDocuments }
     }
 
-    private async hideUnavailableDocuments(user: AppUser, documents: ManualDocumentListItemWithOrder[]): Promise<ManualDocumentListItem[]> {
+    private async hideUnavailableDocuments(
+        user: AppUser,
+        platformAppVersion: PlatformAppVersion,
+        documents: ManualDocumentListItemWithOrder[],
+    ): Promise<ManualDocumentListItem[]> {
         const { identifier: userIdentifier } = user
 
-        const documentsFilteredDefault: ManualDocumentListItemWithOrder[] = []
+        const documentsFilteredByService: ManualDocumentListItemWithOrder[] = []
 
         await Promise.all(
             documents.map(async (document) => {
@@ -82,7 +103,7 @@ export default class ManualDocumentsListService {
                     const showInManualList = this.showInManualListStrategies[document.code]
 
                     if (showInManualList) {
-                        showInList = await showInManualList(userIdentifier, document.code)
+                        showInList = await showInManualList(user, document.code)
                     }
                 } catch (err) {
                     this.logger.error('Failed to check is manual document should be showed', { err })
@@ -91,27 +112,25 @@ export default class ManualDocumentsListService {
                 }
 
                 if (showInList) {
-                    documentsFilteredDefault.push(document)
+                    documentsFilteredByService.push(document)
                 }
             }),
         )
 
-        const hidableDocumentTypes = documentsFilteredDefault.filter(
-            (document): document is SetRequired<ManualDocumentListItemWithOrder, 'hiddenIfAnyOfDocumentsOwned'> =>
-                Boolean(document.hiddenIfAnyOfDocumentsOwned),
-        )
+        const documentsFilteredDefault = utils.filterByAppVersions(documentsFilteredByService, platformAppVersion)
+        const hidableDocumentTypes = documentsFilteredDefault.filter((document) => Boolean(document.hiddenIfAnyOfDocumentsOwned))
 
-        if (!hidableDocumentTypes.length) {
+        if (hidableDocumentTypes.length === 0) {
             return documentsFilteredDefault
         }
 
-        const documentFilters = hidableDocumentTypes.map(({ hiddenIfAnyOfDocumentsOwned }) =>
-            hiddenIfAnyOfDocumentsOwned.map<DocumentFilter>((documentType) => ({ documentType })),
+        const documentFilters = hidableDocumentTypes.map(({ hiddenIfAnyOfDocumentsOwned = [] }) =>
+            hiddenIfAnyOfDocumentsOwned.map((documentType): DocumentFilter => ({ documentType })),
         )
 
         const { missingDocumnets } = await this.userService.hasDocuments(userIdentifier, documentFilters)
 
-        const documentsToHide = hidableDocumentTypes.filter(({ hiddenIfAnyOfDocumentsOwned }) =>
+        const documentsToHide = hidableDocumentTypes.filter(({ hiddenIfAnyOfDocumentsOwned = [] }) =>
             hiddenIfAnyOfDocumentsOwned.some((documentType) => !missingDocumnets.includes(documentType)),
         )
 
@@ -122,18 +141,5 @@ export default class ManualDocumentsListService {
         return documentsFilteredDefault
             .filter(({ code }) => !manualDocumentTypesToHide.includes(code))
             .map((document) => this.manualDocumentsListDataMapper.toListItemWithoutMeta(document))
-    }
-
-    private loadPluginDeps(instances: DocumentService[]): void {
-        instances.forEach((service) => {
-            const { manualDocumentNames = [], showInManualList } = service
-
-            manualDocumentNames.forEach((manualDocumentName) => {
-                Object.assign(
-                    this.showInManualListStrategies,
-                    showInManualList ? { [manualDocumentName]: showInManualList.bind(service) } : {},
-                )
-            })
-        })
     }
 }

@@ -1,10 +1,10 @@
-import { DocumentType, ServiceActionArguments } from '@diia-inhouse/types'
+import { ServiceActionArguments } from '@diia-inhouse/types'
 
 import { Document } from '@interfaces/services/documents'
 
 export interface CustomActionArguments extends ServiceActionArguments {
     params: {
-        documentType: DocumentType
+        documentType: string
         barcode: string
     }
 }

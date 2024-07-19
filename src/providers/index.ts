@@ -1,6 +1,6 @@
 import { Constructor, asClass } from 'awilix'
 
-import { DepsResolver } from '@diia-inhouse/diia-app'
+import { NameAndRegistrationPair } from '@diia-inhouse/diia-app'
 
 import DocumentsDmsProvider from '@providers/dms/documentsDms'
 import DocumentsDmsMockProvider from '@providers/dms/documentsDmsMock'
@@ -10,7 +10,7 @@ import DocumentsEisMockProvider from '@providers/eis/documentsEisMock'
 import { AppConfig } from '@interfaces/config'
 import { DocumentsDmsServiceProvider, DocumentsEisServiceProvider, ProvidersDeps } from '@interfaces/providers'
 
-export function getProvidersDeps(config: AppConfig): DepsResolver<ProvidersDeps> {
+export function getProvidersDeps(config: AppConfig): NameAndRegistrationPair<ProvidersDeps> {
     const { eis, dms } = config
 
     const documentsEisProvider: Constructor<DocumentsEisServiceProvider> = eis.isEnabled ? DocumentsEisProvider : DocumentsEisMockProvider

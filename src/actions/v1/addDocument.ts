@@ -1,14 +1,14 @@
 import { AppAction } from '@diia-inhouse/diia-app'
 
 import { BadRequestError } from '@diia-inhouse/errors'
-import { ActionVersion, SessionType } from '@diia-inhouse/types'
+import { ActionVersion, OnInit, SessionType } from '@diia-inhouse/types'
 import { ValidationSchema } from '@diia-inhouse/validators'
 
 import DocumentsService from '@services/documents'
 
 import { ActionResult, CustomActionArguments } from '@interfaces/actions/v1/addDocument'
 
-export default class AddDocumentAction implements AppAction {
+export default class AddDocumentAction implements AppAction, OnInit {
     constructor(private readonly documentsService: DocumentsService) {}
 
     readonly sessionType: SessionType = SessionType.User
@@ -17,8 +17,14 @@ export default class AddDocumentAction implements AppAction {
 
     readonly name: string = 'addDocument'
 
+    readonly addDocumentTypes: string[] = []
+
     readonly validationRules: ValidationSchema = {
-        documentType: { type: 'string', enum: Object.keys(this.documentsService.addDocumentStrategies) },
+        documentType: { type: 'string', enum: this.addDocumentTypes },
+    }
+
+    onInit(): void {
+        this.addDocumentTypes.push(...Object.keys(this.documentsService.addDocumentStrategies))
     }
 
     async handler(args: CustomActionArguments): Promise<ActionResult> {

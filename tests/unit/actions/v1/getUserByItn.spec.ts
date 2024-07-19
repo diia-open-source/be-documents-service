@@ -2,14 +2,14 @@ import { pick } from 'lodash'
 
 import TestKit, { mockInstance } from '@diia-inhouse/test'
 
-import GetUserByITNAction from '@actions/v1/getUserByITN'
+import GetUserByItnAction from '@actions/v1/getUserByItn'
 
 import DocumentsExpirationService from '@services/documentsExpiration'
 
-import { TaxPayerDTO } from '@interfaces/actions/v1/getUserByITN'
+import { TaxPayerDTO } from '@interfaces/actions/v1/getUserByItn'
 import { AppConfig } from '@interfaces/config'
 
-describe(`Action ${GetUserByITNAction.name}`, () => {
+describe(`Action ${GetUserByItnAction.name}`, () => {
     const testKit = new TestKit()
     const documentsExpirationService = mockInstance(DocumentsExpirationService)
 
@@ -17,7 +17,7 @@ describe(`Action ${GetUserByITNAction.name}`, () => {
         const appConfig = <AppConfig>(<unknown>{
             returnItnDataIsEnabled: true,
         })
-        const action = new GetUserByITNAction(documentsExpirationService, appConfig)
+        const action = new GetUserByItnAction(documentsExpirationService, appConfig)
 
         const { headers, session } = testKit.session.getUserActionArguments()
 
@@ -49,7 +49,7 @@ describe(`Action ${GetUserByITNAction.name}`, () => {
         const appConfig = <AppConfig>(<unknown>{
             returnItnDataIsEnabled: false,
         })
-        const action = new GetUserByITNAction(documentsExpirationService, appConfig)
+        const action = new GetUserByItnAction(documentsExpirationService, appConfig)
 
         const { headers, session } = testKit.session.getUserActionArguments()
 

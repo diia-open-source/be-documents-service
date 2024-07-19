@@ -1,9 +1,10 @@
 import { AppAction } from '@diia-inhouse/diia-app'
 
-import { ActionVersion, DocumentType, SessionType } from '@diia-inhouse/types'
+import { ActionVersion, SessionType } from '@diia-inhouse/types'
 import { ValidationSchema } from '@diia-inhouse/validators'
 
 import { ActionResult, CustomActionArguments } from '@src/documents/taxpayerCard/interfaces/action/v1/verifyTaxpayerCard'
+import { DocumentType } from '@src/documents/taxpayerCard/interfaces/services'
 
 import DocumentVerificationService from '@services/documentVerification'
 

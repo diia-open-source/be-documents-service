@@ -1,28 +1,41 @@
 import { AccessDeniedError, BadRequestError, DocumentNotFoundError, InternalServerError } from '@diia-inhouse/errors'
-import { AppUser, DocStatus, DocumentInstance, DocumentType, DriverLicense, Localization, Logger, UserTokenData } from '@diia-inhouse/types'
+import { AppUser, DocStatus, GenericData, Localization, Logger, UserTokenData } from '@diia-inhouse/types'
 
 import DriverLicenseDataMapper from '@src/documents/driverLicense/dataMappers/document'
+import DriverLicensePdfDataMapper from '@src/documents/driverLicense/dataMappers/documentPdf'
 import { DriverLicenseHscServiceProvider } from '@src/documents/driverLicense/interfaces/providers'
 import { DriverLicenseFull } from '@src/documents/driverLicense/interfaces/providers/hsc'
+import { DocumentType, DocumentTypeCamelCase, DriverLicense } from '@src/documents/driverLicense/interfaces/services'
 import { AnalyticsActionType } from '@src/documents/driverLicense/interfaces/services/analytics'
-import { DriverLicenseAssertParams } from '@src/documents/driverLicense/interfaces/services/documentVerification'
 
 import PassportService from '@services/passport'
 
 import { Passport } from '@interfaces/providers/eis'
-import { AnalyticsCategory as ServiceAnalyticsCategory } from '@interfaces/services'
+import { DocumentInstance, AnalyticsCategory as ServiceAnalyticsCategory } from '@interfaces/services'
 import { DefaultValue, DocumentService, GetDocumentsContext, GetDocumentsParams, GetDocumentsResult } from '@interfaces/services/documents'
 import { AssertStrategyParams, DocumentVerifyParams, VerifyOtpResponse } from '@interfaces/services/documentVerification'
 
-export default class DriverLicenseService implements DocumentService {
+export default class DriverLicenseService implements DocumentService<DocumentType, DocumentTypeCamelCase> {
     readonly documentTypes = [DocumentType.DriverLicense]
 
+    readonly defaultSortOrder: Record<DocumentType, number> = {
+        [DocumentType.DriverLicense]: 150,
+    }
+
+    readonly documentTypeToName: Record<DocumentType, string> = {
+        [DocumentType.DriverLicense]: 'Посвідчення водія',
+    }
+
     readonly documentTypeToDocumentTypeResponse = {
-        [DocumentType.DriverLicense]: 'driverLicense',
+        [DocumentType.DriverLicense]: DocumentTypeCamelCase.DriverLicense,
     }
 
     readonly documentTypeResponseToDocumentType = {
         driverLicense: DocumentType.DriverLicense,
+    }
+
+    readonly documentTypeToGrpcDocumentType: Partial<Record<DocumentType, DocumentTypeCamelCase>> = {
+        [DocumentType.DriverLicense]: DocumentTypeCamelCase.DriverLicense,
     }
 
     readonly documentFilters: DocumentType[] = this.documentTypes
@@ -33,15 +46,22 @@ export default class DriverLicenseService implements DocumentService {
 
     constructor(
         private readonly logger: Logger,
+
         private readonly passportService: PassportService,
+
         private readonly driverLicenseHscProvider: DriverLicenseHscServiceProvider,
+
         private readonly driverLicenseDataMapper: DriverLicenseDataMapper,
+        private readonly driverLicensePdfDataMapper: DriverLicensePdfDataMapper,
     ) {}
 
     async assertDocumentIsValid({ documentId, documentAssertParams }: AssertStrategyParams): Promise<void> | never {
-        const { itn } = <DriverLicenseAssertParams>documentAssertParams
+        const {
+            user: { itn },
+        } = documentAssertParams
+
         const documents: DriverLicense[] = await this.getDriverLicenses(itn)
-        if (!documents.length) {
+        if (documents.length === 0) {
             throw new AccessDeniedError()
         }
 
@@ -131,18 +151,22 @@ export default class DriverLicenseService implements DocumentService {
         driverLicense.shareLocalization = localization
 
         if (docStatus === DocStatus.NoPhoto) {
-            const driverLicenseWithPhotoFromPassport = this.passportService.enrichDocumentWithPhoto(
-                driverLicense,
-                passports,
-                ServiceAnalyticsCategory.VerificationDocuments,
-                AnalyticsActionType.GetPassportForDriverLicense,
-                { driverLicenseId: docId },
-            )
+            const driverLicenseWithPhotoFromPassport = this.passportService.enrichDocumentWithPhoto(driverLicense, passports, {
+                analytics: {
+                    category: ServiceAnalyticsCategory.VerificationDocuments,
+                    action: AnalyticsActionType.GetPassportForDriverLicense,
+                    data: { driverLicenseId: docId },
+                },
+            })
 
             return this.verifyDriverLicenseDocument(driverLicenseWithPhotoFromPassport, designSystem, localization)
         }
 
         return this.verifyDriverLicenseDocument(driverLicense, designSystem, localization)
+    }
+
+    getSharingRenderData(document: DriverLicense, requester: string, requestDateTime: string, requestIdentifier: string): GenericData {
+        return this.driverLicensePdfDataMapper.toSharingPdf(document, requester, requestDateTime, requestIdentifier)
     }
 
     private async getDriverLicense(user: UserTokenData, docId: string, passport?: Passport): Promise<DriverLicense | undefined> {

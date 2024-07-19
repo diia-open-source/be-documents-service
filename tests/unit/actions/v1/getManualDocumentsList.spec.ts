@@ -23,6 +23,10 @@ describe(`Action ${GetManualDocumentsListAction.name}`, () => {
         jest.spyOn(manualDocumentsListService, 'getListV1').mockResolvedValueOnce({ documents })
 
         expect(await action.handler({ session, headers })).toMatchObject({ documents })
-        expect(manualDocumentsListService.getListV1).toHaveBeenCalledWith(session.user)
+        expect(manualDocumentsListService.getListV1).toHaveBeenCalledWith(session.user, {
+            appVersion: headers.appVersion,
+            platformType: headers.platformType,
+            platformVersion: headers.platformVersion,
+        })
     })
 })

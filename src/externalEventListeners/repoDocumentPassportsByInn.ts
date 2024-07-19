@@ -1,7 +1,8 @@
-import { EventBusListener, ExternalEvent } from '@diia-inhouse/diia-queue'
+import { EventBusListener } from '@diia-inhouse/diia-queue'
 import { ValidationSchema } from '@diia-inhouse/validators'
 
 import { PassportsByInnResponse } from '@interfaces/externalEventListeners/repoDocumentPassportsByInn'
+import { ExternalEvent } from '@interfaces/queue'
 
 export default class RepoDocumentPassportsByInnEventListener implements EventBusListener {
     readonly event: ExternalEvent = ExternalEvent.RepoDocumentPassportsByInn

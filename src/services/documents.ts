@@ -1,12 +1,11 @@
-import { createHash } from 'crypto'
+/* eslint-disable unicorn/no-nested-ternary */
+import { createHash } from 'node:crypto'
 
 import { find, identity, merge, uniq } from 'lodash'
-import { UpdateQuery } from 'mongoose'
 import { SetRequired } from 'type-fest'
 
-import { PluginDepsCollection } from '@diia-inhouse/diia-app'
-
 import { DocumentDecryptedData, IdentifierService } from '@diia-inhouse/crypto'
+import { UpdateQuery } from '@diia-inhouse/db'
 import { Task } from '@diia-inhouse/diia-queue'
 import { EnvService } from '@diia-inhouse/env'
 import { AccessDeniedError, BadRequestError, InternalServerError } from '@diia-inhouse/errors'
@@ -15,54 +14,55 @@ import {
     AppUser,
     AppUserActionHeaders,
     DocStatus,
-    DocumentInstance,
-    DocumentType,
-    DocumentTypeCamelCase,
     DurationMs,
+    GenericObject,
     HttpStatusCode,
     Logger,
+    OnRegistrationsFinished,
     OwnerType,
     ProfileFeature,
     SessionType,
-    Documents as TypedDocuments,
-    UnavailableDocument,
     UserFeatures,
     UserSession,
     UserTokenData,
 } from '@diia-inhouse/types'
+import { UserServiceClient } from '@diia-inhouse/user-service-client'
 import { utils } from '@diia-inhouse/utils'
 
 import TaxpayerCardService from '@src/documents/taxpayerCard/services/document'
 
 import AnalyticsService from '@services/analytics'
+import DocumentSettingsService from '@services/documentSettings'
 import DocumentsExpirationService from '@services/documentsExpiration'
 import DocumentStorageService from '@services/documentStorage'
 import PassportService from '@services/passport'
 import UserService from '@services/user'
+import UserDocumentSettingsService from '@services/userDocumentSettings'
 
 import DocumentsDataMapper from '@dataMappers/documentsDataMapper'
 
 import Utils from '@utils/index'
 
 import { ExpirationType } from '@interfaces/models/documentSetting'
-import { DocumentsExpirationModel } from '@interfaces/models/documentsExpiration'
+import { DocumentIdsExpiration, DocumentsExpirationModel } from '@interfaces/models/documentsExpiration'
+import { DocumentInstance } from '@interfaces/services'
 import { DocumentDecryptedDataByDocumentType } from '@interfaces/services/cryptData'
 import {
     AddDocumentParams,
     AddDocumentStrategy,
+    AnyDocumentService,
     CommonDocument,
     DeleteDocumentStrategy,
     DeleteDocumentStrategyResponse,
     Document,
     DocumentResponse,
     DocumentResponseVariation,
-    DocumentService,
     DocumentStatusCode,
-    DocumentTypeResponse,
     DocumentWithCover,
     DocumentWithETagRequest,
     DocumentWithETagResponse,
     Documents,
+    DocumentsDefaultOrder,
     DocumentsFeaturePointsExistence,
     DocumentsResponse,
     DocumentsWithOrder,
@@ -78,86 +78,115 @@ import {
     GetDocumentsResult,
     GetDocumentsStrategy,
     GetIdentityDocumentStrategy,
+    GetSharingRenderDataByDocumentTypeStrategy,
     IdentityDocument,
+    IsDocumentForceUpdate,
+    IsDocumentForceUpdateParams,
+    SkipSaveToUserProfileConditions,
     SyncDocumentDataStrategy,
+    UnavailableDocument,
     UserDocumentsOrderDTO,
 } from '@interfaces/services/documents'
 import { DocumentIdStatus } from '@interfaces/services/documentsExpiration'
+import { PassportDocumentType, PassportDocumentTypeCamelCase } from '@interfaces/services/passport'
 import { ProcessUserDocumentsParams, UserDocumentsOrderResponse, UserProfileDocument } from '@interfaces/services/user'
 import { ServiceTask } from '@interfaces/tasks'
 
-export default class DocumentsService {
-    readonly documentTypeToDocumentTypeResponse: Partial<Record<DocumentType, DocumentTypeResponse>> = {
-        [DocumentType.InternalPassport]: DocumentTypeResponse.IdCard,
-        [DocumentType.ForeignPassport]: DocumentTypeResponse.ForeignPassport,
+export default class DocumentsService implements OnRegistrationsFinished {
+    readonly documentTypeToDocumentTypeResponse: Record<string, string> = {
+        [PassportDocumentType.InternalPassport]: PassportDocumentTypeCamelCase.IdCard,
+        [PassportDocumentType.ForeignPassport]: PassportDocumentTypeCamelCase.ForeignPassport,
     }
 
-    readonly documentTypeToIdentityDocumentTypeResponse: Partial<Record<DocumentType, string>> = {
+    readonly documentTypeToIdentityDocumentTypeResponse: Record<string, string> = {
         ...this.documentTypeToDocumentTypeResponse,
     }
 
-    readonly documentTypeResponseToDocumentType: Partial<Record<DocumentTypeResponse, DocumentType>> = {
-        [DocumentTypeResponse.IdCard]: DocumentType.InternalPassport,
-        [DocumentTypeResponse.ForeignPassport]: DocumentType.ForeignPassport,
+    readonly documentTypeResponseToDocumentType: Partial<Record<string, string>> = {
+        [PassportDocumentTypeCamelCase.IdCard]: PassportDocumentType.InternalPassport,
+        [PassportDocumentTypeCamelCase.ForeignPassport]: PassportDocumentType.ForeignPassport,
     }
 
-    readonly documentFilters: DocumentType[] = [DocumentType.InternalPassport, DocumentType.ForeignPassport]
+    readonly documentTypes: string[] = [PassportDocumentType.InternalPassport, PassportDocumentType.ForeignPassport]
 
-    readonly documentFiltersBySessionType: Partial<Record<SessionType, DocumentType[]>> = {
+    readonly documentFilters: string[] = [PassportDocumentType.InternalPassport, PassportDocumentType.ForeignPassport]
+
+    readonly documentFiltersBySessionType: Partial<Record<SessionType, string[]>> = {
         [SessionType.User]: this.documentFilters,
         [SessionType.CabinetUser]: this.documentFilters,
     }
 
-    readonly documentFiltersBySessionTypeAndFeature: Partial<Record<SessionType, Partial<Record<ProfileFeature, DocumentType[]>>>> = {}
+    readonly allDocumentFilters: string[] = [...this.documentFilters]
 
-    private readonly documentsToGetFeaturePoints: DocumentType[] = [DocumentType.InternalPassport, DocumentType.ForeignPassport]
+    readonly documentFiltersBySessionTypeAndFeature: Partial<Record<SessionType, Partial<Record<ProfileFeature, string[]>>>> = {}
 
-    private readonly getDocumentsStrategiesByDocumentType: Partial<Record<DocumentType, GetDocumentsStrategy | null>> = {
-        [DocumentType.ForeignPassport]: this.passportService.getForeignPassportDocuments.bind(this.passportService),
-        [DocumentType.InternalPassport]: this.passportService.getInternalPassportDocuments.bind(this.passportService),
-    }
+    private readonly documentsToGetFeaturePoints: string[] = [PassportDocumentType.InternalPassport, PassportDocumentType.ForeignPassport]
 
-    private readonly getDocumentsToProcessV1StrategiesByDocumentType: Partial<Record<DocumentType, GetDocumentsStrategy | null>> = {
-        ...this.getDocumentsStrategiesByDocumentType,
+    private readonly getDocumentsStrategiesByDocumentType: Record<string, GetDocumentsStrategy | null>
+
+    private readonly getDocumentsToProcessV1StrategiesByDocumentType: Record<string, GetDocumentsStrategy | null>
+
+    readonly documentTypeToGrpcDocumentType: Record<string, string> = {
+        [PassportDocumentType.InternalPassport]: 'internalPassport',
+        [PassportDocumentType.ForeignPassport]: 'foreignPassport',
     }
 
     readonly getDocumentStrategies: Partial<Record<string, GetDocumentStrategy>> = {}
 
-    private readonly syncDocumentDataStrategies: Partial<Record<DocumentType, SyncDocumentDataStrategy>> = {
-        [DocumentType.InternationalVaccinationCertificate]: () => [],
-        [DocumentType.ChildLocalVaccinationCertificate]: () => [],
-        [DocumentType.LocalVaccinationCertificate]: () => [],
-    }
+    private readonly syncDocumentDataStrategies: Record<string, SyncDocumentDataStrategy> = {}
 
     private readonly getIdentityDocumentStrategyBySessionType: Partial<Record<SessionType, GetIdentityDocumentStrategy>> = {}
 
-    private readonly getIdentityDocumentByDocumentType: Partial<Record<DocumentType, GetIdentityDocumentStrategy>> = {
-        [DocumentType.InternalPassport]: this.passportService.getIdentityDocument.bind(this.passportService),
-        [DocumentType.ForeignPassport]: this.passportService.getIdentityDocument.bind(this.passportService),
-    }
+    private readonly getIdentityDocumentByDocumentType: Record<string, GetIdentityDocumentStrategy>
 
-    readonly identityDocumentTypes: DocumentType[] = [DocumentType.InternalPassport, DocumentType.ForeignPassport]
+    readonly identityDocumentTypes: string[] = [PassportDocumentType.InternalPassport, PassportDocumentType.ForeignPassport]
 
     readonly addDocumentStrategies: Record<string, AddDocumentStrategy> = {}
 
-    readonly addDocumentToRelatedDocuments: Record<string, DocumentType[]> = {}
+    readonly documentForceUpdateStrategies: Partial<Record<string, IsDocumentForceUpdate>> = {}
 
-    readonly deleteDocumentStrategies: Partial<Record<DocumentType, DeleteDocumentStrategy>> = {}
+    readonly addDocumentToRelatedDocuments: Record<string, string[]> = {}
 
-    readonly deleteDocumentProcessCodeByType: Partial<Record<DocumentType, [number, number]>> = {}
+    readonly deleteDocumentStrategies: Record<string, DeleteDocumentStrategy> = {}
 
-    private readonly documentTypeResponsesToEnrich: string[] = [DocumentTypeResponse.ForeignPassport, DocumentTypeResponse.IdCard]
+    readonly deleteDocumentProcessCodeByType: Record<string, [number, number]> = {}
+
+    private readonly documentTypeResponsesToEnrich: string[] = [
+        PassportDocumentTypeCamelCase.ForeignPassport,
+        PassportDocumentTypeCamelCase.IdCard,
+    ]
 
     private readonly enrichDocumentsStrategiesByDocumentTypeResponse: Record<string, EnrichDocumentsStrategy> = {}
 
+    private readonly defaultSortOrder: Record<string, number> = {
+        [PassportDocumentType.InternalPassport]: 100,
+        [PassportDocumentType.ForeignPassport]: 110,
+    }
+
+    private documentsDefaultOrder: DocumentsDefaultOrder = {}
+
+    private documentTypeToName: Record<string, string> = {
+        [PassportDocumentType.InternalPassport]: 'Паспорт громадянина України',
+        [PassportDocumentType.ForeignPassport]: 'Закордонний паспорт',
+    }
+
+    private readonly skipSaveToUserProfileConditionsByDocumentType: Record<string, SkipSaveToUserProfileConditions> = {}
+
+    private readonly statusesToSaveDocumentData: DocumentStatusCode[] = [HttpStatusCode.OK, HttpStatusCode.NOT_FOUND]
+
+    private readonly getSharingRenderDataByDocumentTypeStrategies: Record<string, GetSharingRenderDataByDocumentTypeStrategy>
+
     constructor(
         private readonly analyticsService: AnalyticsService,
-        private readonly documentServices: PluginDepsCollection<DocumentService>,
+        private readonly documentServices: Partial<AnyDocumentService>[],
         private readonly documentsExpirationService: DocumentsExpirationService,
         private readonly documentStorageService: DocumentStorageService,
+        private readonly documentSettingsService: DocumentSettingsService,
         private readonly passportService: PassportService,
         private readonly taxpayerCardService: TaxpayerCardService,
         private readonly userService: UserService,
+        private readonly userServiceClient: UserServiceClient,
+        private readonly userDocumentSettingsService: UserDocumentSettingsService,
 
         private readonly documentsDataMapper: DocumentsDataMapper,
 
@@ -168,11 +197,30 @@ export default class DocumentsService {
         private readonly logger: Logger,
         private readonly task: Task,
     ) {
-        this.loadPluginDeps(this.documentServices.items)
-        this.documentServices.on('newItems', (instances) => this.loadPluginDeps(instances))
+        this.getDocumentsStrategiesByDocumentType = {
+            [PassportDocumentType.ForeignPassport]: this.passportService.getForeignPassportDocuments.bind(this.passportService),
+            [PassportDocumentType.InternalPassport]: this.passportService.getInternalPassportDocuments.bind(this.passportService),
+        }
+        this.getDocumentsToProcessV1StrategiesByDocumentType = {
+            ...this.getDocumentsStrategiesByDocumentType,
+        }
+        this.getIdentityDocumentByDocumentType = {
+            [PassportDocumentType.InternalPassport]: this.passportService.getIdentityDocument.bind(this.passportService),
+            [PassportDocumentType.ForeignPassport]: this.passportService.getIdentityDocument.bind(this.passportService),
+        }
+        this.getSharingRenderDataByDocumentTypeStrategies = {
+            [PassportDocumentType.ForeignPassport]: this.passportService.getForeignPassportSharingRenderData.bind(this.passportService),
+            [PassportDocumentType.InternalPassport]: this.passportService.getInternalPassportSharingRenderData.bind(this.passportService),
+        }
     }
 
-    getDocumentsFilterForSession(session: { sessionType: SessionType; features?: UserFeatures }): DocumentType[] {
+    onRegistrationsFinished(): void {
+        this.loadPluginDeps(this.documentServices)
+        this.composeSortedByDefaultDocumentTypes(this.documentServices)
+        this.composeDocumentTypeToName(this.documentServices)
+    }
+
+    getDocumentsFilterForSession(session: { sessionType: SessionType; features?: UserFeatures }): string[] {
         const { sessionType, features = {} } = session
         const filterBySessionType = this.documentFiltersBySessionType[sessionType]
 
@@ -182,134 +230,164 @@ export default class DocumentsService {
 
         const filter = [...filterBySessionType]
 
-        Object.keys(features).forEach((feature) => {
+        for (const feature of Object.keys(features)) {
             const documentTypesByFeature = this.documentFiltersBySessionTypeAndFeature[sessionType] || {}
             const documentTypes = documentTypesByFeature[<ProfileFeature>feature] || []
 
             filter.push(...documentTypes)
-        })
+        }
 
         return filter
     }
 
     async getDocuments<T extends DocumentResponseVariation>(
         session: UserSession,
-        documentFilter: DocumentType[],
+        documentFilter: string[],
         headers: AppUserActionHeaders,
         outputParams: GetDocumentsOutputParams = {},
     ): Promise<DocumentsWithOrder<T>> {
-        const { user, features } = session
+        const { user, features = {} } = session
         const { withCover = false, designSystem = false } = outputParams
-        const startTime: number = Date.now()
+        const startTime = Date.now()
         const { mobileUid } = headers
 
-        this.logger.info('Action getDocuments in', { startTime, mobileUid })
+        this.logger.info('Action getDocuments in', { mobileUid })
         this.validateUser(user)
 
         const { identifier: userIdentifier } = user
 
-        const filteredDocTypes = documentFilter
-            .map((docName) => this.documentTypeToDocumentTypeResponse[docName])
-            .filter((type: DocumentTypeResponse | undefined): type is DocumentTypeResponse => !!type)
+        const filteredDocTypes = documentFilter.map((docName) => this.documentTypeToDocumentTypeResponse[docName]).filter(Boolean)
+
         const documentTypes = uniq(filteredDocTypes)
 
-        const [documentsExpiration, checkedPoints, storageDataByDocumentTypes] = await Promise.all([
-            this.documentsExpirationService.getDocumentsExpiration(mobileUid, userIdentifier),
-            this.checkDocumentsFeaturePoints(userIdentifier),
-            this.userService.getDecryptedDataFromStorage({ userIdentifier, mobileUid }),
-        ])
+        const [documentsExpiration, documentsSettings, userDocumentSettings, checkedPoints, storageDataByDocumentTypes] = await Promise.all(
+            [
+                this.documentsExpirationService.getDocumentsExpiration(mobileUid, userIdentifier),
+                this.documentSettingsService.getDocumentsSettings(),
+                this.userServiceClient.getUserDocumentSettings({
+                    userIdentifier,
+                    features: Object.keys(features),
+                    documentsDefaultOrder: this.documentsDefaultOrder,
+                }),
+                this.checkDocumentsFeaturePoints(userIdentifier),
+                this.userService.getDecryptedDataFromStorage({ userIdentifier, mobileUid }),
+            ],
+        )
 
+        const { documentOrderSettings, documentVisibilitySettings } = userDocumentSettings
         const unavailableDocumentsByType = this.getUnavailableDocuments<T>(documentTypes, documentsExpiration)
         const result: Documents<T> = { ...unavailableDocumentsByType }
         const expirationsModifier: UpdateQuery<DocumentsExpirationModel> = {}
         const context: GetDocumentsContext = {}
 
-        // TODO(BACK-2386): add filter by docs that require verify block
         if (designSystem) {
             context.promisedTaxpayerCardTableOrg = this.taxpayerCardService.getTaxpayerCardTableOrg(user)
         }
 
-        const tasks: Promise<void>[] = documentTypes
-            .filter((documentTypeResponse) => !unavailableDocumentsByType[documentTypeResponse])
-            .map(async (documentTypeResponse) => {
-                const documentType = this.documentTypeResponseToDocumentType[documentTypeResponse]
+        for (const documentType of this.documentTypes) {
+            const isForceUpdateDocument = this.isDocumentForceUpdate({ documentType, documentsExpiration })
+            if (isForceUpdateDocument) {
+                documentTypes.push(<string>this.documentTypeToDocumentTypeResponse[documentType])
+            }
+        }
 
-                if (!documentType) {
-                    return
-                }
+        const documentsToGetFromRegistry = documentTypes.filter((documentTypeResponse) => !unavailableDocumentsByType[documentTypeResponse])
+        const tasks = documentsToGetFromRegistry.map(async (documentTypeResponse) => {
+            const documentType = this.documentTypeResponseToDocumentType[documentTypeResponse]
+            if (!documentType) {
+                return
+            }
 
-                const getDocumentByTypeStartTime = Date.now()
+            const documentVisibilitySetting = this.userDocumentSettingsService.findSettingsByType(documentVisibilitySettings, documentType)
+            const isDocumentTypeHidden = await this.documentSettingsService.isDocumentTypeHidden(
+                documentType,
+                documentsSettings,
+                documentVisibilitySetting,
+            )
 
-                this.logger.info('Start call registry by document type', { documentType, startTime: getDocumentByTypeStartTime, mobileUid })
+            if (isDocumentTypeHidden) {
+                this.logger.info(`Hide document type by visibility settings: ${documentType}`)
 
-                const {
-                    customExpirationTime,
-                    expirationType,
-                    statusCode,
-                    unavailableDocuments,
-                    documents,
-                    documentsToProcess,
-                    designSystemDocuments,
-                } = withCover
-                    ? await this.getDocumentsDataByTypeWithCovers(documentType, storageDataByDocumentTypes, context, session, headers)
-                    : await this.getDocumentsDataByType(documentType, storageDataByDocumentTypes, context, session, headers, designSystem)
+                return
+            }
 
-                const getDocumentByTypeEndTime = Date.now()
-                const documentStatuses = this.getDocumentStatuses(documentsToProcess, statusCode, documentType, userIdentifier, headers)
-                const { expirationTime, modifier } = await this.documentsExpirationService.collectDocumentExpirationModifier(
-                    documentType,
-                    documentStatuses,
-                    expirationType,
-                    customExpirationTime,
-                )
+            const getDocumentByTypeStartTime = Date.now()
 
-                const data = withCover
-                    ? this.documentsDataMapper.toDocumentsWithCover(documentsToProcess, documentType)
-                    : designSystem
-                    ? designSystemDocuments
-                    : documents
+            this.logger.info('Start call registry by document type', { documentType, startTime: getDocumentByTypeStartTime, mobileUid })
 
-                Object.assign(expirationsModifier, modifier)
-                result[documentTypeResponse] = {
-                    status: statusCode,
-                    data: <T[]>data,
-                    unavailableData: unavailableDocuments,
-                    ...this.documentsExpirationService.generateMetaData(expirationTime),
-                }
+            const {
+                customExpirationTime,
+                expirationType,
+                statusCode,
+                unavailableDocuments,
+                documents: documentsAll,
+                documentsToProcess: documentsToProcessAll,
+                designSystemDocuments: designSystemDocumentsAll,
+            } = withCover
+                ? await this.getDocumentsDataByTypeWithCovers(documentType, storageDataByDocumentTypes, context, session, headers)
+                : await this.getDocumentsDataByType(documentType, storageDataByDocumentTypes, context, session, headers, designSystem)
 
-                const decryptedDataFromStorage = this.appUtils.getStorageDataByDocumentTypes<DocumentDecryptedData>(
-                    documentType,
-                    storageDataByDocumentTypes,
-                )
+            const documentsToProcess = this.userDocumentSettingsService.filterDocuments(documentVisibilitySetting, documentsToProcessAll)
+            const visibleDocIds = new Set(documentsToProcess.map((el) => el.id))
+            const documents = documentsAll.filter((doc) => visibleDocIds.has(doc.id))
+            const designSystemDocuments = designSystemDocumentsAll.filter((doc) => visibleDocIds.has(doc.id))
 
-                await this.publishDocumentsEvents(
-                    userIdentifier,
-                    headers,
-                    documentType,
-                    documents,
-                    unavailableDocuments,
-                    decryptedDataFromStorage,
-                    statusCode,
-                    checkedPoints,
-                )
+            const getDocumentByTypeEndTime = Date.now()
+            const documentStatuses = this.getDocumentStatuses(documentsToProcess, statusCode, documentType, userIdentifier, headers)
+            const { expirationTime, modifier } = await this.documentsExpirationService.collectDocumentExpirationModifier(
+                documentType,
+                documentStatuses,
+                expirationType,
+                customExpirationTime,
+            )
 
-                this.logger.info('End call registry by document type', {
-                    documentType,
-                    statusCode,
-                    mobileUid,
-                    duration: getDocumentByTypeEndTime - getDocumentByTypeStartTime,
-                    startTime: getDocumentByTypeStartTime,
-                    endTime: getDocumentByTypeEndTime,
-                    dataExists: !!data.length,
-                    dataLength: data.length,
-                })
+            const data = withCover
+                ? this.documentsDataMapper.toDocumentsWithCover(documentsToProcess, documentType)
+                : designSystem
+                ? designSystemDocuments
+                : documents
+
+            Object.assign(expirationsModifier, modifier)
+            result[documentTypeResponse] = {
+                status: statusCode,
+                data: <T[]>data,
+                unavailableData: unavailableDocuments,
+                ...this.documentsExpirationService.generateMetaData(expirationTime),
+            }
+
+            const decryptedDataFromStorage = this.appUtils.getStorageDataByDocumentTypes<DocumentDecryptedData>(
+                documentType,
+                storageDataByDocumentTypes,
+            )
+
+            await this.publishDocumentsEvents(
+                userIdentifier,
+                headers,
+                documentType,
+                documents,
+                unavailableDocuments,
+                decryptedDataFromStorage,
+                statusCode,
+                checkedPoints,
+            )
+
+            this.logger.info('End call registry by document type', {
+                documentType,
+                statusCode,
+                mobileUid,
+                duration: getDocumentByTypeEndTime - getDocumentByTypeStartTime,
+                startTime: getDocumentByTypeStartTime,
+                endTime: getDocumentByTypeEndTime,
+                dataExists: data.length > 0,
+                dataLength: data.length,
             })
+        })
 
         await Promise.all(tasks)
 
         const documentGetter = withCover ? this.getDocumentFromDocumentWithCover : identity
-        const [userDocumentsOrder] = await Promise.all([
-            this.userService.getDocumentsOrder({ userIdentifier, features }),
+
+        await Promise.all([
             this.documentsExpirationService.performDocumentsExpirationUpdate(mobileUid, userIdentifier, expirationsModifier),
             this.publishProcessDocumentsTask(userIdentifier, documentTypes),
         ])
@@ -322,19 +400,19 @@ export default class DocumentsService {
 
         this.logger.info('Action getDocuments out', { startTime, endTime, duration: endTime - startTime, mobileUid })
 
-        return this.sortDocuments(result, userDocumentsOrder, documentGetter)
+        return this.sortDocuments(result, documentOrderSettings, documentGetter)
     }
 
-    async getDocumentsToProcess<T extends DocumentType>(
+    async getDocumentsToProcess(
         user: UserTokenData,
         headers: AppUserActionHeaders,
-        requestDocumentTypes: T[],
+        requestDocumentTypes: string[],
         options: GetDocumentToProcessOptions,
         ignoreCache: boolean,
-    ): Promise<TypedDocuments<T>> {
+    ): Promise<Documents<CommonDocument>> {
         const { itn } = user
 
-        const result: TypedDocuments<T> = <TypedDocuments<T>>{}
+        const result: Documents<CommonDocument> = {}
         const context: GetDocumentsParams['context'] = {}
 
         await Promise.all(
@@ -374,7 +452,7 @@ export default class DocumentsService {
         const { itn, identifier: userIdentifier } = user
         const { mobileUid } = headers
 
-        const documentsDataByType: Partial<Record<DocumentTypeCamelCase, DocumentWithETagResponse>> = {}
+        const documentsDataByType: Partial<Record<string, DocumentWithETagResponse>> = {}
         const expirationsModifier: UpdateQuery<DocumentsExpirationModel> = {}
         const context: GetDocumentsContext = {
             promisedTaxpayerCardTableOrg: this.taxpayerCardService.getTaxpayerCardTableOrg(user),
@@ -383,8 +461,8 @@ export default class DocumentsService {
         const documentsExpiration = await this.documentsExpirationService.getDocumentsExpiration(mobileUid, userIdentifier)
 
         const documentTypes = documentsWithETag.filter((docWithETag) => {
-            const documentType = utils.camelCaseToDocumentType[docWithETag.type]
-            const documentExpiration = documentsExpiration?.[documentType]
+            const documentType = utils.camelCaseToDocumentType(docWithETag.type)
+            const documentExpiration = <DocumentIdsExpiration | undefined>documentsExpiration?.[documentType]
 
             return this.documentsExpirationService.isDocumentExpired(documentExpiration, docWithETag.eTag)
         })
@@ -393,7 +471,7 @@ export default class DocumentsService {
 
         await Promise.all(
             documentTypes.map(async ({ type: docTypeCamelCase }) => {
-                const documentType = utils.camelCaseToDocumentType[docTypeCamelCase]
+                const documentType = utils.camelCaseToDocumentType(docTypeCamelCase)
 
                 const documentsData = await this.getDocumentsByType({
                     documentType,
@@ -431,6 +509,10 @@ export default class DocumentsService {
                     data: documents,
                     eTag,
                 }
+
+                if (this.statusesToSaveDocumentData.includes(statusCode)) {
+                    await this.saveDocumentsInUserProfile(userIdentifier, documentType, documents, headers, false)
+                }
             }),
         )
 
@@ -439,12 +521,8 @@ export default class DocumentsService {
         return documentsDataByType
     }
 
-    async getDocumentsToProcessByItn<T extends DocumentType>(
-        itn: string,
-        documentTypes: T[],
-        ignoreCache: boolean,
-    ): Promise<TypedDocuments<T>> {
-        const result: TypedDocuments<T> = <TypedDocuments<T>>{}
+    async getDocumentsToProcessByItn(itn: string, documentTypes: string[], ignoreCache: boolean): Promise<Documents<CommonDocument>> {
+        const result: Documents<CommonDocument> = {}
         const context: GetDocumentsParams['context'] = {}
 
         await Promise.all(
@@ -466,13 +544,13 @@ export default class DocumentsService {
     }
 
     /** @deprecated */
-    async getDocumentsToProcessV1(documentTypes: DocumentType[], user: UserTokenData): Promise<Documents<CommonDocument>> {
+    async getDocumentsToProcessV1(documentTypes: string[], user: UserTokenData): Promise<Documents<CommonDocument>> {
         const { itn } = user
         const result: Documents<CommonDocument> = {}
         const context: GetDocumentsParams['context'] = {}
 
         await Promise.all(
-            documentTypes.map(async (documentType: DocumentType) => {
+            documentTypes.map(async (documentType) => {
                 const documentTypeResponse = this.documentTypeToDocumentTypeResponse[documentType]
 
                 if (!documentTypeResponse) {
@@ -492,12 +570,16 @@ export default class DocumentsService {
         return result
     }
 
-    async getFilteredDocumentsOrder(userIdentifier: string): Promise<DocumentTypeResponse[]> {
-        const userDocumentsOrder = await this.userService.getDocumentsOrder({ userIdentifier })
+    async getFilteredDocumentsOrder(userIdentifier: string): Promise<string[]> {
+        const { documentOrderSettings = [] } = await this.userServiceClient.getUserDocumentSettings({
+            userIdentifier,
+            features: [],
+            documentsDefaultOrder: this.documentsDefaultOrder,
+        })
 
-        const documentsTypeOrder = userDocumentsOrder
+        const documentsTypeOrder = documentOrderSettings
             .map((userDocumentOrder) => this.documentTypeToDocumentTypeResponse[userDocumentOrder.documentType])
-            .filter((type: DocumentTypeResponse | undefined): type is DocumentTypeResponse => !!type)
+            .filter(Boolean)
 
         return documentsTypeOrder
     }
@@ -527,7 +609,7 @@ export default class DocumentsService {
         return await getIdentityDocumentStrategy(user)
     }
 
-    async handlePhotoForDocumentToProcess(userIdentifier: string, documentType: DocumentType, document: CommonDocument): Promise<void> {
+    async handlePhotoForDocumentToProcess(userIdentifier: string, documentType: string, document: CommonDocument): Promise<void> {
         const checkedPoints: DocumentsFeaturePointsExistence | undefined = await this.checkDocumentsFeaturePoints(userIdentifier)
         if (!checkedPoints) {
             throw new InternalServerError('Error occurred checking feature points')
@@ -569,7 +651,7 @@ export default class DocumentsService {
 
     async deleteDocument(
         user: AppUser,
-        documentType: DocumentType,
+        documentType: string,
         documentId: string,
         mobileUid: string,
         force: boolean | undefined,
@@ -595,19 +677,22 @@ export default class DocumentsService {
 
     async saveDocumentsInUserProfile(
         userIdentifier: string,
-        documentType: DocumentType,
+        documentType: string,
         documents: CommonDocument[],
         headers: ActHeaders,
         removeMissingDocuments = true,
     ): Promise<void> {
         const userProfileDocuments = documents
             .map((document): UserProfileDocument | undefined => {
-                if (documentType === DocumentType.TaxpayerCard && this.envService.isProd() && document.docStatus !== DocStatus.Ok) {
+                const conditions = this.skipSaveToUserProfileConditionsByDocumentType[documentType]
+
+                if (conditions && conditions.env === this.envService.getEnv() && conditions.docStatuses.includes(document.docStatus)) {
                     return
                 }
 
                 return this.documentsDataMapper.toUserProfileDocument(documentType, document)
             })
+            // eslint-disable-next-line unicorn/prefer-native-coercion-functions
             .filter((item): item is UserProfileDocument => Boolean(item))
 
         await this.userService.saveDocumentsInUserProfile({
@@ -621,7 +706,7 @@ export default class DocumentsService {
 
     async syncDocumentDataInStorage(
         userIdentifier: string,
-        documentType: DocumentType,
+        documentType: string,
         documents: CommonDocument[],
         decryptedDataFromStorage: DocumentDecryptedData[],
         unavailableDocuments?: UnavailableDocument[],
@@ -636,18 +721,18 @@ export default class DocumentsService {
 
         const tasks = strategy(userIdentifier, documentType, documents, decryptedDataFromStorage, unavailableDocuments)
 
-        decryptedDataFromStorage.forEach((dataToEncrypt: DocumentDecryptedData) => {
+        for (const dataToEncrypt of decryptedDataFromStorage) {
             if (!dataToEncrypt.isDeleted) {
                 tasks.push(this.documentStorageService.removeFromStorage(userIdentifier, documentType, dataToEncrypt))
             }
-        })
+        }
 
         await Promise.allSettled(tasks)
     }
 
     async handleDocumentsPhoto(
         userIdentifier: string,
-        documentType: DocumentType,
+        documentType: string,
         documents: CommonDocument[],
         checkedPoints: DocumentsFeaturePointsExistence | undefined,
     ): Promise<void> {
@@ -698,13 +783,13 @@ export default class DocumentsService {
             const result: DocumentsFeaturePointsExistence = {}
             const featurePointsResult = await this.userService.checkDocumentsFeaturePoints(userIdentifier)
 
-            featurePointsResult.documents.forEach(({ documentType, documentIdentifier }) => {
+            for (const { documentType, documentIdentifier } of featurePointsResult.documents) {
                 if (!result[documentType]) {
                     result[documentType] = new Set<string>()
                 }
 
                 result?.[documentType]?.add(documentIdentifier)
-            })
+            }
 
             return result
         } catch (err) {
@@ -725,7 +810,7 @@ export default class DocumentsService {
         }
     }
 
-    async hasDocumentInRegistry(documentType: DocumentType, user: UserTokenData): Promise<boolean> {
+    async hasDocumentInRegistry(documentType: string, user: UserTokenData): Promise<boolean> {
         const documents = await this.getDocumentsToProcessV1([documentType], user)
         const docField = this.documentTypeToDocumentTypeResponse[documentType]
 
@@ -739,11 +824,38 @@ export default class DocumentsService {
         }
 
         const { data, status } = document
-        if (status === HttpStatusCode.OK && data.length) {
+        if (status === HttpStatusCode.OK && data.length > 0) {
             return true
         }
 
         return false
+    }
+
+    getSortedByDefaultDocumentTypes(): DocumentsDefaultOrder {
+        return this.documentsDefaultOrder
+    }
+
+    getDocumentNames(documentTypes: string[]): Record<string, string> {
+        if (documentTypes.length === 0) {
+            return this.documentTypeToName
+        }
+
+        return Object.fromEntries(Object.entries(this.documentTypeToName).filter(([documentType]) => documentTypes.includes(documentType)))
+    }
+
+    getSharingRenderDataByDocumentType(
+        documentType: string,
+        data: unknown,
+        requester: string,
+        requestDateTime: string,
+        requestIdentifier: string,
+    ): GenericObject {
+        const getSharingRenderDataByDocumentTypeStrategy = this.getSharingRenderDataByDocumentTypeStrategies[documentType]
+        if (!getSharingRenderDataByDocumentTypeStrategy) {
+            throw new Error(`Unknown scope ${documentType}`)
+        }
+
+        return getSharingRenderDataByDocumentTypeStrategy(data, requester, requestDateTime, requestIdentifier, documentType)
     }
 
     private async enrichDocuments<T extends DocumentResponseVariation>(
@@ -753,27 +865,26 @@ export default class DocumentsService {
     ): Promise<void> {
         const retrieveDocuments = (data: T[] | undefined): Document[] => {
             return data
-                ? data.map((document) => documentGetter(document)).filter((document): document is Document => Boolean(document))
+                ? // eslint-disable-next-line unicorn/prefer-native-coercion-functions
+                  data.map((document) => documentGetter(document)).filter((document): document is Document => Boolean(document))
                 : []
         }
 
-        const documentsToEnrich = this.documentTypeResponsesToEnrich.reduce(
-            (acc, docTypeResponse) => {
-                const docResponse = documents[<DocumentTypeResponse>docTypeResponse]
-                const docs = retrieveDocuments(docResponse?.data)
+        let documentsToEnrich: CommonDocument[] = []
+        for (const docTypeResponse of this.documentTypeResponsesToEnrich) {
+            const docResponse = documents[docTypeResponse]
+            const docs = retrieveDocuments(docResponse?.data)
 
-                return [...acc, ...docs]
-            },
-            <CommonDocument[]>[],
-        )
+            documentsToEnrich = [...documentsToEnrich, ...docs]
+        }
 
-        if (!documentsToEnrich.length) {
+        if (documentsToEnrich.length === 0) {
             return
         }
 
         await Promise.all(
             Object.entries(this.enrichDocumentsStrategiesByDocumentTypeResponse).map(async ([docTypeResponse, strategy]) => {
-                const docResponse = documents[<DocumentTypeResponse>docTypeResponse]
+                const docResponse = documents[docTypeResponse]
                 const documentsToEnrichWith = retrieveDocuments(docResponse?.data)
 
                 await strategy(documentsToEnrich, { user, documentsToEnrichWith })
@@ -826,7 +937,7 @@ export default class DocumentsService {
     }
 
     private async getDocumentsDataByType(
-        documentType: DocumentType,
+        documentType: string,
         storageDataByDocumentTypes: DocumentDecryptedDataByDocumentType,
         context: GetDocumentsContext,
         session: UserSession,
@@ -859,7 +970,7 @@ export default class DocumentsService {
     }
 
     private async getDocumentsDataByTypeWithCovers(
-        documentType: DocumentType,
+        documentType: string,
         storageDataByDocumentTypes: DocumentDecryptedDataByDocumentType,
         context: GetDocumentsContext,
         session: UserSession,
@@ -878,7 +989,7 @@ export default class DocumentsService {
         const documentsToProcess: CommonDocument[] = [
             ...documents,
             ...userDocuments
-                .filter((doc) => !!doc.docId && !find(documents, { id: doc.docId }))
+                .filter((doc) => Boolean(doc.docId) && !find(documents, { id: doc.docId }))
                 .map(({ docId, ownerType = OwnerType.owner }) => <Document>{ id: docId, ownerType, docStatus: DocStatus.NotFound }),
         ]
 
@@ -896,55 +1007,106 @@ export default class DocumentsService {
     private async publishDocumentsEvents(
         userIdentifier: string,
         headers: ActHeaders,
-        documentType: DocumentType,
+        documentType: string,
         documents: CommonDocument[],
         unavailableDocuments: UnavailableDocument[] | undefined,
         decryptedDataFromStorage: DocumentDecryptedData[],
         statusCode: DocumentStatusCode,
         checkedPoints: DocumentsFeaturePointsExistence | undefined,
     ): Promise<void> {
-        const successCodes: DocumentStatusCode[] = [HttpStatusCode.OK, HttpStatusCode.NOT_FOUND]
-        if (successCodes.includes(statusCode)) {
-            await Promise.all([
-                this.saveDocumentsInUserProfile(userIdentifier, documentType, documents, headers, false),
-                this.syncDocumentDataInStorage(userIdentifier, documentType, documents, decryptedDataFromStorage, unavailableDocuments),
-                this.handleDocumentsPhoto(userIdentifier, documentType, documents, checkedPoints),
-            ])
+        if (!this.statusesToSaveDocumentData.includes(statusCode)) {
+            return
         }
+
+        await Promise.all([
+            this.saveDocumentsInUserProfile(userIdentifier, documentType, documents, headers, false),
+            this.syncDocumentDataInStorage(userIdentifier, documentType, documents, decryptedDataFromStorage, unavailableDocuments),
+            this.handleDocumentsPhoto(userIdentifier, documentType, documents, checkedPoints),
+        ])
     }
 
-    private async publishProcessDocumentsTask(userIdentifier: string, documentTypes: DocumentTypeResponse[]): Promise<void> {
+    private async publishProcessDocumentsTask(userIdentifier: string, documentTypes: string[]): Promise<void> {
         const payload: ProcessUserDocumentsParams = {
             userIdentifier,
             documentTypes: documentTypes
                 .map((item) => this.documentTypeResponseToDocumentType[item])
-                .filter((type: DocumentType | undefined): type is DocumentType => !!type),
+                // eslint-disable-next-line unicorn/prefer-native-coercion-functions
+                .filter((type: string | undefined): type is string => Boolean(type)),
         }
 
         await this.task.publish(ServiceTask.ProcessUserDocuments, payload, DurationMs.Minute * 5)
     }
 
+    private composeSortedByDefaultDocumentTypes(instances: Partial<AnyDocumentService>[]): void {
+        const docTypeBySortOrder: Map<SessionType, Map<number, string>> = new Map()
+
+        instances
+            .map(({ defaultSortOrder, sessionType }) => ({ defaultSortOrder, sessionType }))
+            .concat({ defaultSortOrder: this.defaultSortOrder, sessionType: undefined })
+            // eslint-disable-next-line unicorn/no-array-for-each
+            .forEach(({ defaultSortOrder = {}, sessionType = SessionType.User }) => {
+                // eslint-disable-next-line unicorn/no-array-for-each
+                Object.entries(defaultSortOrder).forEach(([documentType, order]) => {
+                    if (order === undefined) {
+                        return
+                    }
+
+                    const existedOrderedDocType = docTypeBySortOrder.get(sessionType)?.get(order)
+                    if (existedOrderedDocType) {
+                        throw new InternalServerError(
+                            `Order number is not unique for ${documentType}. ${order} number already assigned to ${existedOrderedDocType}`,
+                        )
+                    }
+
+                    if (!docTypeBySortOrder.has(sessionType)) {
+                        docTypeBySortOrder.set(sessionType, new Map())
+                    }
+
+                    docTypeBySortOrder.get(sessionType)?.set(order, documentType)
+                })
+            })
+
+        for (const [sessionType, defaultSortOrders] of docTypeBySortOrder) {
+            this.documentsDefaultOrder[sessionType] = {
+                items: [...defaultSortOrders.entries()].sort(([a], [b]) => a - b).map(([, documentType]) => documentType),
+            }
+        }
+    }
+
+    private composeDocumentTypeToName(instances: Partial<AnyDocumentService>[]): void {
+        for (const { documentTypeToName } of instances) {
+            Object.assign(this.documentTypeToName, documentTypeToName)
+        }
+    }
+
     private getUnavailableDocuments<T extends Document | DocumentInstance | DocumentWithCover>(
-        documentTypes: DocumentTypeResponse[],
+        documentTypes: string[],
         documentsExpiration: DocumentsExpirationModel | null,
     ): Documents<T> {
-        return documentTypes.reduce((acc, documentTypeResponse) => {
+        let unavailableDocuments = {}
+        for (const documentTypeResponse of documentTypes) {
             const documentType = this.documentTypeResponseToDocumentType[documentTypeResponse]
 
             if (!documentType) {
-                return acc
+                continue
             }
 
-            const metadata = this.documentsExpirationService.checkDocumentExpiration(documentType, documentsExpiration?.[documentType])
+            const documentExpiration = <DocumentIdsExpiration | undefined>documentsExpiration?.[documentType]
+            const metadata = this.documentsExpirationService.checkDocumentExpiration(documentType, documentExpiration)
 
-            return { ...acc, ...(metadata ? { [documentTypeResponse]: { status: HttpStatusCode.FORBIDDEN, data: [], ...metadata } } : {}) }
-        }, {})
+            unavailableDocuments = {
+                ...unavailableDocuments,
+                ...(metadata ? { [documentTypeResponse]: { status: HttpStatusCode.FORBIDDEN, data: [], ...metadata } } : {}),
+            }
+        }
+
+        return unavailableDocuments
     }
 
     private getDocumentStatuses(
         documents: CommonDocument[],
         statusCode: DocumentStatusCode,
-        documentType: DocumentType,
+        documentType: string,
         userIdentifier: string,
         headers: AppUserActionHeaders,
     ): DocumentIdStatus[] {
@@ -957,7 +1119,7 @@ export default class DocumentsService {
             return { id, ownerType, status: docStatus }
         })
 
-        if (!statuses.length) {
+        if (statuses.length === 0) {
             this.analyticsService.logDocumentAnalytics({ statusCode, documentType, userIdentifier, headers })
         }
 
@@ -969,30 +1131,28 @@ export default class DocumentsService {
         userDocumentsOrder: UserDocumentsOrderResponse[],
         documentGetter: (document: T) => CommonDocument | Document | DocumentInstance | undefined = identity,
     ): DocumentsWithOrder<T> {
+        const docsWithoutSortOrder: string[] = []
+
         const userDocumentsOrderWithTypeFilter = this.getUserDocumentsOrderWithTypeFilter(userDocumentsOrder)
         const sortedDocuments: Documents<T> = userDocumentsOrderWithTypeFilter
             .map(({ documentFilter, ...rest }) => ({ ...rest, documentFilter, documentByType: documents[documentFilter] }))
             .filter(({ documentByType, documentFilter }) => {
                 if (!documentByType) {
-                    this.logger.info(`Documents not found by documentTypeFilter on sorting: ${documentFilter}`)
+                    docsWithoutSortOrder.push(documentFilter)
 
                     return false
                 }
 
                 return true
             })
+            // eslint-disable-next-line unicorn/no-array-reduce
             .reduce((acc, { documentFilter, documentByType, documentIdentifiers }) => {
-                const sortedDocumentByType = this.sortDocumentsByCustomOrder(
-                    documentByType,
-                    documentIdentifiers,
-                    documentFilter,
-                    documentGetter,
-                )
-
-                this.logger.info(`Setting sorted documents for type: ${documentFilter}`, sortedDocumentByType)
+                const sortedDocumentByType = this.sortDocumentsByCustomOrder(documentByType, documentIdentifiers, documentGetter)
 
                 return { ...acc, [documentFilter]: sortedDocumentByType }
             }, {})
+
+        this.logger.info(`Sort documents`, { userDocumentsOrder, docsWithoutSortOrder })
 
         return {
             ...sortedDocuments,
@@ -1010,7 +1170,6 @@ export default class DocumentsService {
             .filter((docOrder: Partial<UserDocumentsOrderDTO>): docOrder is UserDocumentsOrderDTO => {
                 const { documentType, documentFilter } = docOrder
 
-                this.logger.info(`Start sorting documents for ${documentType}`, { documentFilter })
                 if (!documentFilter) {
                     this.logger.warn("Haven't found documentTypeFilter by documentType in user's documents order", { documentType })
 
@@ -1021,10 +1180,15 @@ export default class DocumentsService {
             })
     }
 
+    private isDocumentForceUpdate(params: IsDocumentForceUpdateParams): boolean {
+        const isForceUpdateStrategy = this.documentForceUpdateStrategies[params.documentType]
+
+        return isForceUpdateStrategy ? isForceUpdateStrategy(params) : false
+    }
+
     private sortDocumentsByCustomOrder<T extends DocumentResponseVariation>(
         documentByType: DocumentResponse<T> | undefined,
         documentIdentifiersCustomOrder: string[] | undefined,
-        documentFilter: DocumentTypeResponse,
         documentGetter: (document: T) => CommonDocument | Document | DocumentInstance | undefined = identity,
     ): DocumentResponse<T> | undefined {
         if (!documentIdentifiersCustomOrder?.length || !documentByType?.data.length) {
@@ -1035,33 +1199,30 @@ export default class DocumentsService {
         const unsortedData: T[] = []
         const documentIdentifiers: string[] = []
 
-        documentByType.data.forEach((item, indx: number) => {
+        for (const [indx, item] of documentByType.data.entries()) {
             const document = documentGetter(item)
             if (document) {
                 documentIdentifiers[indx] = this.identifier.createIdentifier(document.docNumber)
             } else {
                 unsortedData.push(item)
             }
-        })
+        }
 
         const filteredDocumentIdentifiersCustomOrder = documentIdentifiersCustomOrder.filter(
             (item) => item && documentIdentifiers.includes(item),
         )
 
-        documentByType.data.forEach((item: T, indx: number) => {
+        for (const [indx, item] of documentByType.data.entries()) {
             const documentIdentifier = documentIdentifiers[indx]
             const documentOrderIndex = filteredDocumentIdentifiersCustomOrder.indexOf(documentIdentifier)
 
-            this.logger.info(`Setting document to sortedData: ${documentFilter}`, {
-                documentIdentifier,
-                documentOrderIndex,
-            })
             if (documentOrderIndex === -1) {
-                return unsortedData.push(item)
+                unsortedData.push(item)
+                continue
             }
 
             sortedData[documentOrderIndex] = item
-        })
+        }
 
         return { ...documentByType, data: sortedData.concat(unsortedData) }
     }
@@ -1072,8 +1233,8 @@ export default class DocumentsService {
         return (<DocumentWithCover>document).document
     }
 
-    private loadPluginDeps(instances: DocumentService[]): void {
-        instances.forEach((service) => {
+    private loadPluginDeps(instances: Partial<AnyDocumentService>[]): void {
+        for (const service of instances) {
             const {
                 addDocument,
                 addDocumentType,
@@ -1089,7 +1250,8 @@ export default class DocumentsService {
                 documentFilters = [],
                 documentFiltersBySessionType = {},
                 documentFiltersBySessionTypeAndFeature = {},
-                documentTypes,
+                documentTypes = [],
+                documentTypeToGrpcDocumentType = {},
                 documentTypeResponsesToEnrich = [],
                 documentTypeResponseToDocumentType,
                 documentTypeToIdentityDocumentTypeResponse = {},
@@ -1098,15 +1260,25 @@ export default class DocumentsService {
                 enrichDocumentsStrategiesByDocumentTypeResponse = {},
                 identityDocumentTypes = [],
                 syncDocumentDataStrategies = {},
+                skipSaveToUserProfileConditionsByDocumentType = {},
+                isDocumentForceUpdate,
+                getSharingRenderData,
             } = service
 
-            documentTypes.forEach((documentType) => {
+            for (const documentType of documentTypes) {
                 Object.assign(this.getDocumentsStrategiesByDocumentType, { [documentType]: getDocuments?.bind(service) })
                 Object.assign(this.getDocumentsToProcessV1StrategiesByDocumentType, {
                     [documentType]: getDocumentsToProcess ? getDocumentsToProcess.bind(service) : getDocuments?.bind(service),
                 })
                 Object.assign(this.deleteDocumentStrategies, deleteDocument ? { [documentType]: deleteDocument.bind(service) } : {})
-            })
+                Object.assign(
+                    this.documentForceUpdateStrategies,
+                    isDocumentForceUpdate ? { [documentType]: isDocumentForceUpdate.bind(service) } : {},
+                )
+                Object.assign(this.getSharingRenderDataByDocumentTypeStrategies, {
+                    [documentType]: getSharingRenderData?.bind(service),
+                })
+            }
 
             Object.assign(this.documentTypeToDocumentTypeResponse, documentTypeToDocumentTypeResponse)
             Object.assign(
@@ -1129,12 +1301,21 @@ export default class DocumentsService {
             Object.assign(this.getIdentityDocumentStrategyBySessionType, getIdentityDocumentStrategyBySessionType)
             Object.assign(this.syncDocumentDataStrategies, syncDocumentDataStrategies)
             Object.assign(this.enrichDocumentsStrategiesByDocumentTypeResponse, enrichDocumentsStrategiesByDocumentTypeResponse)
+            Object.assign(this.documentTypeToGrpcDocumentType, documentTypeToGrpcDocumentType)
+            Object.assign(this.skipSaveToUserProfileConditionsByDocumentType, skipSaveToUserProfileConditionsByDocumentType)
+            this.documentTypes.push(...documentTypes)
             this.documentFilters.push(...documentFilters)
             this.documentsToGetFeaturePoints.push(...documentsToGetFeaturePoints)
             this.identityDocumentTypes.push(...identityDocumentTypes)
             this.documentTypeResponsesToEnrich.push(...documentTypeResponsesToEnrich)
             merge(this.documentFiltersBySessionType, documentFiltersBySessionType)
             merge(this.documentFiltersBySessionTypeAndFeature, documentFiltersBySessionTypeAndFeature)
-        })
+            this.allDocumentFilters.push(
+                ...documentFilters,
+                ...Object.values(this.documentFiltersBySessionTypeAndFeature)
+                    .flatMap((val) => Object.values(val))
+                    .flat(),
+            )
+        }
     }
 }

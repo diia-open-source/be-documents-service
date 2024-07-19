@@ -1,4 +1,4 @@
-import { EventBus, InternalEvent, TaskListener } from '@diia-inhouse/diia-queue'
+import { EventBus, TaskListener } from '@diia-inhouse/diia-queue'
 import { StoreService } from '@diia-inhouse/redis'
 import { Gender, HttpStatusCode, Logger } from '@diia-inhouse/types'
 import { utils } from '@diia-inhouse/utils'
@@ -7,6 +7,7 @@ import { ValidationSchema } from '@diia-inhouse/validators'
 import PassportService from '@services/passport'
 
 import { PassportByInn, PassportByInnRequester } from '@interfaces/providers/dms'
+import { InternalEvent } from '@interfaces/queue'
 import { ServiceTask } from '@interfaces/tasks'
 import { EventPayload } from '@interfaces/tasks/publishAdultRegistrationAddressCommunity'
 

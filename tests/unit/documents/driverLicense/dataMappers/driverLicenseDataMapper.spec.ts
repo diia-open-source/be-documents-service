@@ -2,7 +2,7 @@ import moment from 'moment'
 
 import DiiaLogger from '@diia-inhouse/diia-logger'
 import { mockInstance } from '@diia-inhouse/test'
-import { DocStatus, DocumentStatus, DocumentType, LicenseType, TickerAtmType, TickerAtmUsage } from '@diia-inhouse/types'
+import { DocStatus, TickerAtmType, TickerAtmUsage } from '@diia-inhouse/types'
 
 import DriverLicenseDataMapper from '@src/documents/driverLicense/dataMappers/document'
 import { PluginConfig } from '@src/documents/driverLicense/interfaces/config'
@@ -11,6 +11,7 @@ import {
     DriverLicenseDocumentDTO,
     RegistryDriverLicenseDTO,
 } from '@src/documents/driverLicense/interfaces/providers/hsc'
+import { DocumentStatus, DocumentType, LicenseType } from '@src/documents/driverLicense/interfaces/services'
 import { getDriverLicense } from '@src/documents/driverLicense/providers/hsc/mockData'
 
 import DocumentAttributesService from '@services/documentAttributes'
@@ -23,6 +24,7 @@ import photo from '@mocks/stubs/photo'
 
 import { AppConfig } from '@interfaces/config'
 import { DocumentTickerCode, DocumentTickerPlaceholder } from '@interfaces/services/documentAttributes'
+import { ComponentIdFrontCard } from '@interfaces/services/documents'
 
 describe(`Data mappers DriverLicenseDataMapper`, () => {
     const documentAttributesServiceMock = mockInstance(DocumentAttributesService)
@@ -64,6 +66,7 @@ describe(`Data mappers DriverLicenseDataMapper`, () => {
                 })
 
                 // act
+                // eslint-disable-next-line unicorn/no-useless-undefined
                 const response = driverLicenseDataMapper.toDocumentInstanceV1(driverLicenseRegistryResponse, undefined)
 
                 // assert
@@ -82,6 +85,7 @@ describe(`Data mappers DriverLicenseDataMapper`, () => {
                 })
 
                 // act
+                // eslint-disable-next-line unicorn/no-useless-undefined
                 const response = driverLicenseDataMapper.toDocumentInstanceV1(driverLicenseRegistryResponse, undefined)
 
                 // assert
@@ -100,6 +104,7 @@ describe(`Data mappers DriverLicenseDataMapper`, () => {
                 })
 
                 // act
+                // eslint-disable-next-line unicorn/no-useless-undefined
                 const response = driverLicenseDataMapper.toDocumentInstanceV1(driverLicenseRegistryResponse, undefined)
 
                 // assert
@@ -118,6 +123,7 @@ describe(`Data mappers DriverLicenseDataMapper`, () => {
                 })
 
                 // act
+                // eslint-disable-next-line unicorn/no-useless-undefined
                 const response = driverLicenseDataMapper.toDocumentInstanceV1(driverLicenseRegistryResponse, undefined)
 
                 // assert
@@ -151,6 +157,7 @@ describe(`Data mappers DriverLicenseDataMapper`, () => {
                 )
 
                 // act
+                // eslint-disable-next-line unicorn/no-useless-undefined
                 const response = driverLicenseDataMapperDoNotReturnExpired.toDocumentInstanceV1(driverLicenseRegistryResponse, undefined)
 
                 // assert
@@ -171,6 +178,7 @@ describe(`Data mappers DriverLicenseDataMapper`, () => {
                 jest.spyOn(appUtilsMock, 'isExpiredDate').mockReturnValueOnce(true)
 
                 // act
+                // eslint-disable-next-line unicorn/no-useless-undefined
                 const response = driverLicenseDataMapper.toDocumentInstanceV1(driverLicenseRegistryResponse, undefined)
 
                 // assert
@@ -267,7 +275,12 @@ describe(`Data mappers DriverLicenseDataMapper`, () => {
 
                 jest.spyOn(appUtilsMock, 'isExpiredDate').mockReturnValue(isExpiredDate)
 
+                const componentIdsData = Object.values(ComponentIdFrontCard).map((name) => [name, 'test'])
+
+                jest.spyOn(designSystemDataMapper, 'getComponentIds').mockReturnValue(Object.fromEntries(componentIdsData))
+
                 // act
+                // eslint-disable-next-line unicorn/no-useless-undefined
                 const response = driverLicenseDataMapperDoNotReturnExpired.toDocumentInstance(driverLicenseRegistryResponse, undefined)
 
                 // assert
@@ -299,6 +312,7 @@ describe(`Data mappers DriverLicenseDataMapper`, () => {
             jest.spyOn(appUtilsMock, 'isExpiredDate').mockReturnValueOnce(false).mockReturnValueOnce(true)
 
             // act
+            // eslint-disable-next-line unicorn/no-useless-undefined
             const response = driverLicenseDataMapperDoNotReturnExpired.toDocumentInstance(driverLicenseDto, undefined)
 
             // assert

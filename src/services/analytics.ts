@@ -1,8 +1,6 @@
 import moment from 'moment'
 
-import { PluginDepsCollection } from '@diia-inhouse/diia-app'
-
-import { DocStatus, DocumentType, HttpStatusCode, Logger } from '@diia-inhouse/types'
+import { DocStatus, HttpStatusCode, Logger, OnRegistrationsFinished } from '@diia-inhouse/types'
 
 import { AppConfig } from '@interfaces/config'
 import {
@@ -13,16 +11,17 @@ import {
     DocumentAnalyticsParams,
 } from '@interfaces/services'
 import { CommonDocument, DocumentAnalyticsService, DocumentStatusCode } from '@interfaces/services/documents'
+import { PassportDocumentType } from '@interfaces/services/passport'
 
-export default class Analytics {
-    readonly getDocumentActionTypeByDocumentType: Partial<Record<DocumentType, AnalyticsActionType>> = {
-        [DocumentType.InternalPassport]: AnalyticsActionType.GetIdCard,
-        [DocumentType.ForeignPassport]: AnalyticsActionType.GetForeignPassport,
+export default class Analytics implements OnRegistrationsFinished {
+    readonly getDocumentActionTypeByDocumentType: Record<string, AnalyticsActionType> = {
+        [PassportDocumentType.InternalPassport]: AnalyticsActionType.GetIdCard,
+        [PassportDocumentType.ForeignPassport]: AnalyticsActionType.GetForeignPassport,
     }
 
-    readonly generateOtpActionTypeByDocumentType: Partial<Record<DocumentType, AnalyticsActionType | null>> = {
-        [DocumentType.InternalPassport]: AnalyticsActionType.GenerateOtpIdCard,
-        [DocumentType.ForeignPassport]: AnalyticsActionType.GenerateOtpForeignPassport,
+    readonly generateOtpActionTypeByDocumentType: Record<string, AnalyticsActionType | null> = {
+        [PassportDocumentType.InternalPassport]: AnalyticsActionType.GenerateOtpIdCard,
+        [PassportDocumentType.ForeignPassport]: AnalyticsActionType.GenerateOtpForeignPassport,
     }
 
     private readonly actionResultByDocStatus: Partial<Record<DocStatus, AnalyticsActionResult>> = {
@@ -44,10 +43,21 @@ export default class Analytics {
     constructor(
         private readonly logger: Logger,
         private readonly config: AppConfig,
-        private readonly documentAnalyticsServices: PluginDepsCollection<DocumentAnalyticsService>,
-    ) {
-        this.loadPluginDeps(this.documentAnalyticsServices.items)
-        this.documentAnalyticsServices.on('newItems', (instances) => this.loadPluginDeps(instances))
+        private readonly documentAnalyticsServices: DocumentAnalyticsService[],
+    ) {}
+
+    onRegistrationsFinished(): void {
+        for (const instance of this.documentAnalyticsServices) {
+            const {
+                documentTypeToGenerateOtpAnalyticsAction = {},
+                documentTypeToGetDocumentAnalyticsAction = {},
+                actionResultByStatusCode = {},
+            } = instance
+
+            Object.assign(this.generateOtpActionTypeByDocumentType, documentTypeToGenerateOtpAnalyticsAction)
+            Object.assign(this.getDocumentActionTypeByDocumentType, documentTypeToGetDocumentAnalyticsAction)
+            Object.assign(this.actionResultByStatusCode, actionResultByStatusCode)
+        }
     }
 
     logDocumentAnalytics({
@@ -107,23 +117,11 @@ export default class Analytics {
 
         return {
             documentId: id,
+            // eslint-disable-next-line unicorn/consistent-destructuring
             subtype: 'docSubtype' in document ? document.docSubtype : undefined,
             expirationDate:
+                // eslint-disable-next-line unicorn/consistent-destructuring
                 expirationDate instanceof Date ? moment(document.expirationDate).format(this.config.app.dateFormat) : expirationDate,
         }
-    }
-
-    private loadPluginDeps(instances: DocumentAnalyticsService[]): void {
-        instances.forEach((instance) => {
-            const {
-                documentTypeToGenerateOtpAnalyticsAction = {},
-                documentTypeToGetDocumentAnalyticsAction = {},
-                actionResultByStatusCode = {},
-            } = instance
-
-            Object.assign(this.generateOtpActionTypeByDocumentType, documentTypeToGenerateOtpAnalyticsAction)
-            Object.assign(this.getDocumentActionTypeByDocumentType, documentTypeToGetDocumentAnalyticsAction)
-            Object.assign(this.actionResultByStatusCode, actionResultByStatusCode)
-        })
     }
 }

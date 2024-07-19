@@ -1,5 +1,4 @@
 import TestKit, { mockInstance } from '@diia-inhouse/test'
-import { DocumentType } from '@diia-inhouse/types'
 
 import GetDocumentsToProcessAction from '@actions/v2/getDocumentsToProcess'
 
@@ -16,7 +15,7 @@ describe('ExpireDocumentAction', () => {
 
     it('should call documentsService', async () => {
         const getDocumentsToProcessSpy = jest.spyOn(documentsServiceMock, 'getDocumentsToProcess')
-        const documentTypes = [<DocumentType>'document-type']
+        const documentTypes = ['document-type']
         const customActionArguments = {
             params: {
                 documentTypes: documentTypes,

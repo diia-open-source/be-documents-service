@@ -1,19 +1,24 @@
-import { PluginDepsCollection } from '@diia-inhouse/diia-app'
-
 import { BadRequestError } from '@diia-inhouse/errors'
-import { DocumentType, UserTokenData } from '@diia-inhouse/types'
+import { OnRegistrationsFinished, UserTokenData } from '@diia-inhouse/types'
 
-import { DocumentDownloadParams, DocumentDownloadResponse, DocumentService, DownloadStrategy } from '@interfaces/services/documents'
+import { AnyDocumentService, DocumentDownloadParams, DocumentDownloadResponse, DownloadStrategy } from '@interfaces/services/documents'
 
-export default class DocumentDownloadService {
-    private readonly downloadStrategies: Partial<Record<DocumentType, DownloadStrategy>> = {}
+export default class DocumentDownloadService implements OnRegistrationsFinished {
+    readonly downloadStrategies: Record<string, DownloadStrategy<string>> = {}
 
-    constructor(private readonly documentServices: PluginDepsCollection<DocumentService>) {
-        this.loadPluginDeps(this.documentServices.items)
-        this.documentServices.on('newItems', (instances) => this.loadPluginDeps(instances))
+    constructor(private readonly documentServices: Partial<AnyDocumentService>[]) {}
+
+    onRegistrationsFinished(): void {
+        for (const service of this.documentServices) {
+            const { downloadDocument, documentTypes = [] } = service
+
+            for (const documentType of documentTypes) {
+                Object.assign(this.downloadStrategies, downloadDocument ? { [documentType]: downloadDocument.bind(service) } : {})
+            }
+        }
     }
 
-    async downloadDocument(data: DocumentDownloadParams, user?: UserTokenData): Promise<DocumentDownloadResponse> {
+    async downloadDocument(data: DocumentDownloadParams<string>, user?: UserTokenData): Promise<DocumentDownloadResponse> {
         const { documentType } = data
 
         const downloadDocument = this.downloadStrategies[documentType]
@@ -23,15 +28,5 @@ export default class DocumentDownloadService {
         }
 
         return await downloadDocument(data, user)
-    }
-
-    private loadPluginDeps(instances: DocumentService[]): void {
-        instances.forEach((service) => {
-            const { downloadDocument, documentTypes } = service
-
-            documentTypes.forEach((documentType) => {
-                Object.assign(this.downloadStrategies, downloadDocument ? { [documentType]: downloadDocument.bind(service) } : {})
-            })
-        })
     }
 }

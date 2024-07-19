@@ -1,13 +1,14 @@
-import { randomUUID } from 'crypto'
+import { randomUUID } from 'node:crypto'
 
-import { ObjectId } from 'bson'
-
+import { mongo } from '@diia-inhouse/db'
 import TestKit, { mockInstance } from '@diia-inhouse/test'
-import { DocumentType } from '@diia-inhouse/types'
 
 import ShareTaxpayerCardAction from '@src/documents/taxpayerCard/actions/v1/shareTaxpayerCard'
+import { DocumentType } from '@src/documents/taxpayerCard/interfaces/services'
 
 import DocumentVerificationService from '@services/documentVerification'
+
+import { ShareLinkResponse } from '@interfaces/services/documentVerification'
 
 describe(`Action ${ShareTaxpayerCardAction.name}`, () => {
     const testKit = new TestKit()
@@ -24,12 +25,12 @@ describe(`Action ${ShareTaxpayerCardAction.name}`, () => {
             headers,
         }
 
-        const link = {
-            id: new ObjectId(),
+        const link = <ShareLinkResponse>(<unknown>{
+            id: new mongo.ObjectId(),
             link: 'link',
             timerText: 'timerText',
             timerTime: 100,
-        }
+        })
 
         jest.spyOn(documentVerificationService, 'generateOtpLink').mockResolvedValueOnce(link)
 
@@ -38,9 +39,7 @@ describe(`Action ${ShareTaxpayerCardAction.name}`, () => {
             documentType: DocumentType.TaxpayerCard,
             documentId: args.params.documentId,
             headers: args.headers,
-            userIdentifier: args.session.user.identifier,
-            documentAssertParams: { user: args.session.user },
-            generateBarcode: true,
+            user: args.session.user,
         })
     })
 })

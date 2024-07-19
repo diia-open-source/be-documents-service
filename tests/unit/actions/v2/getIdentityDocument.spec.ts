@@ -1,11 +1,13 @@
 import TestKit, { mockInstance } from '@diia-inhouse/test'
-import { IdentityDocumentType, PassportType } from '@diia-inhouse/types'
+
+import { PassportType } from '@src/generated'
 
 import GetIdentityDocumentAction from '@actions/v2/getIdentityDocument'
 
 import DocumentsService from '@services/documents'
 
 import { IdentityDocument } from '@interfaces/services/documents'
+import { PassportDocumentType } from '@interfaces/services/passport'
 
 describe('ExpireDocumentAction', () => {
     const testKit = new TestKit()
@@ -18,7 +20,7 @@ describe('ExpireDocumentAction', () => {
     it('should return identityDocument', async () => {
         const userSession = testKit.session.getUserSession()
         const identityDocument = <IdentityDocument>(<unknown>{
-            identityType: IdentityDocumentType.ForeignPassport,
+            identityType: PassportDocumentType.ForeignPassport,
             type: PassportType.P,
         })
 

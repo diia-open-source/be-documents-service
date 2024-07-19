@@ -1,33 +1,39 @@
-import { randomUUID } from 'crypto'
-import EventEmitter from 'events'
+import { randomUUID } from 'node:crypto'
 
 import { merge } from 'lodash'
 
-import { DocumentType, Localization, ProfileFeature, SessionType } from '@diia-inhouse/types'
+import { Localization, ProfileFeature, SessionType } from '@diia-inhouse/types'
 
-import { DocumentDataMapper, DocumentDesignSystemDataMapper } from '@interfaces/dataMappers'
+import { DocumentDataMapper } from '@interfaces/dataMappers'
 import {
+    AnyDocumentService,
     DocumentAnalyticsService,
     DocumentAttributesService,
     DocumentExpirationService,
-    DocumentService,
     GetDocumentsStrategy,
+    GetSharingRenderDataByDocumentTypeStrategy,
 } from '@interfaces/services/documents'
 import { AssertStrategy, VerificationStrategy } from '@interfaces/services/documentVerification'
 
-export const getDocumentService = (data: Partial<DocumentService> = {}): DocumentService => {
+export const getDocumentService = (data: Partial<AnyDocumentService> = {}): Partial<AnyDocumentService> => {
     return merge(
         {
             assertDocumentIsValid: <AssertStrategy>(<unknown>jest.fn().mockResolvedValue(true)),
-            documentTypeToDocumentTypeResponse: { [<DocumentType>'document-type']: 'documentType' },
-            documentTypeResponseToDocumentType: { documentType: <DocumentType>'document-type' },
-            documentTypes: [<DocumentType>'document-type'],
+            documentTypeToDocumentTypeResponse: { ['document-type']: 'documentType' },
+            documentTypeResponseToDocumentType: { documentType: 'document-type' },
+            defaultSortOrder: { ['document-type1']: 20, ['document-type2']: 180 },
+            documentTypeToName: {
+                ['document-type1']: 'Document type 1 name',
+                ['document-type2']: 'Document type 2 name',
+            },
+            documentTypes: ['document-type'],
             getDocuments: <GetDocumentsStrategy>(<unknown>jest.fn().mockResolvedValue([])),
             getDocumentsToProcess: <GetDocumentsStrategy>(<unknown>jest.fn().mockResolvedValue([])),
             verifyDocument: <VerificationStrategy>(<unknown>jest.fn().mockResolvedValue({ id: randomUUID() })),
+            getSharingRenderData: <GetSharingRenderDataByDocumentTypeStrategy>(() => ({})),
             documentFiltersBySessionTypeAndFeature: {
                 [SessionType.User]: {
-                    [<ProfileFeature>'profile-feature']: [<DocumentType>'document-type-8', <DocumentType>'document-type-9'],
+                    [<ProfileFeature>'profile-feature']: ['document-type-8', 'document-type-9'],
                 },
             },
         },
@@ -36,7 +42,7 @@ export const getDocumentService = (data: Partial<DocumentService> = {}): Documen
 }
 
 export const getDocumentExpirationService = (data: Partial<DocumentExpirationService> = {}): DocumentExpirationService => {
-    return merge({ documentsWithoutExpirationPerUser: [<DocumentType>'document-type'] }, data)
+    return merge({ documentsWithoutExpirationPerUser: ['document-type'] }, data)
 }
 
 export const getDocumentAnalyticsService = (data: Partial<DocumentAnalyticsService> = {}): DocumentAnalyticsService => {
@@ -64,32 +70,14 @@ export const getDocumentAttributesService = (data: Partial<DocumentAttributesSer
     )
 }
 
-export const getDocumentDataMapper = (data: Partial<DocumentDataMapper> = {}): DocumentDataMapper => {
+export const getDocumentDataMapper = (data: Partial<DocumentDataMapper<object, string>> = {}): DocumentDataMapper<object, string> => {
     return merge(
         {
             documentTypes: [],
             enrichUserProfileDocument: jest.fn(),
+            toDocumentInstance: jest.fn(),
+            toVerifyDocumentInstance: jest.fn(),
         },
         data,
     )
-}
-
-export const getDocumentDesignSystemDataMapper = (data: Partial<DocumentDesignSystemDataMapper> = {}): DocumentDesignSystemDataMapper => {
-    return merge({ documentTypeToComponentDocumentName: {} }, data)
-}
-
-export default class PluginDepsCollectionMock<T> extends EventEmitter {
-    constructor(readonly items: T[] = []) {
-        super()
-    }
-
-    on(_event: 'newItems', callback: (items: T[]) => void): this {
-        callback(this.items)
-
-        return this
-    }
-
-    addItems(items: T[]): void {
-        this.items.push(...items)
-    }
 }

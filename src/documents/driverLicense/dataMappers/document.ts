@@ -2,24 +2,7 @@ import isBase64 from 'is-base64'
 import { get } from 'lodash'
 import moment from 'moment'
 
-import {
-    ActionCode,
-    AddressType,
-    DocStatus,
-    DocumentInstance,
-    DocumentStatus,
-    DocumentType,
-    DocumentTypeCamelCase,
-    DriverLicense,
-    DriverLicenseCategory,
-    DriverLicenseDetails,
-    IconAtmActionType,
-    LicenseCategory,
-    LicenseType,
-    Localization,
-    Logger,
-    UserDocumentSubtype,
-} from '@diia-inhouse/types'
+import { ActionCode, DocStatus, IconAtmActionType, Localization, Logger } from '@diia-inhouse/types'
 import { utils } from '@diia-inhouse/utils'
 
 import { PluginConfig } from '@src/documents/driverLicense/interfaces/config'
@@ -30,7 +13,18 @@ import {
     DriverLicenseFull,
     RegistryDriverLicenseDTO,
 } from '@src/documents/driverLicense/interfaces/providers/hsc'
-import { ComponentDocumentName } from '@src/documents/driverLicense/interfaces/services'
+import {
+    AddressType,
+    DocumentStatus,
+    DocumentType,
+    DocumentTypeCamelCase,
+    DriverLicense,
+    DriverLicenseCategory,
+    DriverLicenseDetails,
+    LicenseCategory,
+    LicenseType,
+    UserDocumentSubtype,
+} from '@src/documents/driverLicense/interfaces/services'
 
 import DocumentAttributesService from '@services/documentAttributes'
 
@@ -39,13 +33,14 @@ import DesignSystemDataMapper from '@dataMappers/designSystemDataMapper'
 import Utils from '@utils/index'
 
 import { AppConfig } from '@interfaces/config'
-import { DocumentDataMapper } from '@interfaces/dataMappers'
+import { DocumentDataMapperV1 } from '@interfaces/dataMappers'
 import { Client, ClientAddress } from '@interfaces/dto'
+import { DocumentInstance } from '@interfaces/services'
 import { DocumentTickerCode, DocumentTickerPlaceholder } from '@interfaces/services/documentAttributes'
 import { ComponentIdFrontCard, ComponentIdFullInfo, DefaultValue, DocumentMediaAlias } from '@interfaces/services/documents'
 import { UserProfileDocument } from '@interfaces/services/user'
 
-export default class DriverLicenseDataMapper implements DocumentDataMapper {
+export default class DriverLicenseDataMapper implements DocumentDataMapperV1 {
     readonly documentTypes = [DocumentType.DriverLicense]
 
     private readonly defaultValueByLocalization: Record<Localization, DefaultValue> = {
@@ -89,7 +84,7 @@ export default class DriverLicenseDataMapper implements DocumentDataMapper {
         const [birthAddress] = this.birthAddressesOnly(clientAddr)
         const driverLicenses: DriverLicenseDocumentDTO[] = this.availableLicensesOnly(driverLicense)
 
-        driverLicenses.forEach((license: DriverLicenseDocumentDTO) => {
+        for (const license of driverLicenses) {
             const {
                 id,
                 dend,
@@ -108,7 +103,7 @@ export default class DriverLicenseDataMapper implements DocumentDataMapper {
             const serialNumber = `${sdoc}${ndoc}`
 
             if (!this.config[DocumentType.DriverLicense].returnExpired && !isExpiredIssuedFirst && this.appUtils.isExpiredDate(dend)) {
-                return
+                continue
             }
 
             const licenseEntity: DriverLicense = {
@@ -145,9 +140,9 @@ export default class DriverLicenseDataMapper implements DocumentDataMapper {
             } else {
                 licenseEntities.push(licenseEntity)
             }
-        })
+        }
 
-        return licenseEntities.length ? licenseEntities : inactiveLicenseEntries
+        return licenseEntities.length > 0 ? licenseEntities : inactiveLicenseEntries
     }
 
     // TODO(BACK-3092) create and use common entity
@@ -162,7 +157,7 @@ export default class DriverLicenseDataMapper implements DocumentDataMapper {
         const [birthAddress] = this.birthAddressesOnly(clientAddr)
         const driverLicenses: DriverLicenseDocumentDTO[] = this.availableLicensesOnly(driverLicense)
 
-        driverLicenses.forEach((license: DriverLicenseDocumentDTO) => {
+        for (const license of driverLicenses) {
             const {
                 id,
                 dend,
@@ -182,7 +177,7 @@ export default class DriverLicenseDataMapper implements DocumentDataMapper {
             const serialNumber = `${sdoc}${ndoc}`
 
             if (!this.config[DocumentType.DriverLicense].returnExpired && !isExpiredIssuedFirst && this.appUtils.isExpiredDate(dend)) {
-                return
+                continue
             }
 
             const validUntil = this.appUtils.convertDate(dend) || DefaultValue.NotProvided
@@ -225,6 +220,10 @@ export default class DriverLicenseDataMapper implements DocumentDataMapper {
                     ? categories[0].openDate
                     : categories.map(({ category, openDate }) => `${category} / ${openDate}`).join(';\n')
 
+            const [componentIdsUa, componentIdsEn] = [Localization.UA, Localization.ENG].map((locale) =>
+                this.designSystemDataMapper.getComponentIds(locale, DocumentType.DriverLicense),
+            )
+
             const licenseEntity: DocumentInstance = {
                 id: String(id),
                 docStatus,
@@ -253,19 +252,15 @@ export default class DriverLicenseDataMapper implements DocumentDataMapper {
                     description: `Дійсне до: ${validUntil}`,
                 },
                 frontCard: {
-                    UA: this.designSystemDataMapper.getFrontCardWithPhotoDefault(
+                    UA: this.designSystemDataMapper.getFrontCard(
                         this.docNameByLocaleMap[Localization.UA],
-                        DocumentTypeCamelCase.driverLicense,
+                        DocumentTypeCamelCase.DriverLicense,
                         fullNameUaWithSeparator,
                         tickerUa,
                         [
                             {
                                 tableItemVerticalMlc: {
-                                    componentId: this.designSystemDataMapper.getComponentIdWithLocale(
-                                        ComponentIdFrontCard.BirthDate,
-                                        Localization.UA,
-                                        ComponentDocumentName.DriverLicense,
-                                    ),
+                                    componentId: componentIdsUa[ComponentIdFrontCard.BirthDate],
                                     label: 'Дата\nнародження:',
                                     value: birthdayFormatted || DefaultValue.NotProvided,
                                     valueIcons: [],
@@ -274,11 +269,7 @@ export default class DriverLicenseDataMapper implements DocumentDataMapper {
                             },
                             {
                                 tableItemVerticalMlc: {
-                                    componentId: this.designSystemDataMapper.getComponentIdWithLocale(
-                                        ComponentIdFrontCard.Category,
-                                        Localization.UA,
-                                        ComponentDocumentName.DriverLicense,
-                                    ),
+                                    componentId: componentIdsUa[ComponentIdFrontCard.Category],
                                     label: 'Категорія:',
                                     value: categoriesFormatted,
                                     valueIcons: [],
@@ -287,11 +278,7 @@ export default class DriverLicenseDataMapper implements DocumentDataMapper {
                             },
                             {
                                 tableItemVerticalMlc: {
-                                    componentId: this.designSystemDataMapper.getComponentIdWithLocale(
-                                        ComponentIdFrontCard.DocNumber,
-                                        Localization.UA,
-                                        ComponentDocumentName.DriverLicense,
-                                    ),
+                                    componentId: componentIdsUa[ComponentIdFrontCard.DocNumber],
                                     label: 'Номер\nдокумента:',
                                     value: serialNumber,
                                     valueIcons: [],
@@ -299,21 +286,16 @@ export default class DriverLicenseDataMapper implements DocumentDataMapper {
                                 },
                             },
                         ],
-                        Localization.UA,
                     ),
-                    EN: this.designSystemDataMapper.getFrontCardWithPhotoDefault(
+                    EN: this.designSystemDataMapper.getFrontCard(
                         this.docNameByLocaleMap[Localization.ENG],
-                        DocumentTypeCamelCase.driverLicense,
+                        DocumentTypeCamelCase.DriverLicense,
                         fullNameEnWithSeparator,
                         tickerEn,
                         [
                             {
                                 tableItemVerticalMlc: {
-                                    componentId: this.designSystemDataMapper.getComponentIdWithLocale(
-                                        ComponentIdFrontCard.BirthDate,
-                                        Localization.ENG,
-                                        ComponentDocumentName.DriverLicense,
-                                    ),
+                                    componentId: componentIdsEn[ComponentIdFrontCard.BirthDate],
                                     label: 'Date of birth:',
                                     value: birthdayFormatted || DefaultValue.NotProvidedEN,
                                     valueIcons: [],
@@ -322,11 +304,7 @@ export default class DriverLicenseDataMapper implements DocumentDataMapper {
                             },
                             {
                                 tableItemVerticalMlc: {
-                                    componentId: this.designSystemDataMapper.getComponentIdWithLocale(
-                                        ComponentIdFrontCard.Category,
-                                        Localization.ENG,
-                                        ComponentDocumentName.DriverLicense,
-                                    ),
+                                    componentId: componentIdsEn[ComponentIdFrontCard.Category],
                                     label: 'Category:',
                                     value: categoriesFormatted,
                                     valueIcons: [],
@@ -335,11 +313,7 @@ export default class DriverLicenseDataMapper implements DocumentDataMapper {
                             },
                             {
                                 tableItemVerticalMlc: {
-                                    componentId: this.designSystemDataMapper.getComponentIdWithLocale(
-                                        ComponentIdFrontCard.DocNumber,
-                                        Localization.ENG,
-                                        ComponentDocumentName.DriverLicense,
-                                    ),
+                                    componentId: componentIdsEn[ComponentIdFrontCard.DocNumber],
                                     label: 'Licence\nnumber:',
                                     value: serialNumber,
                                     valueIcons: [],
@@ -347,7 +321,7 @@ export default class DriverLicenseDataMapper implements DocumentDataMapper {
                                 },
                             },
                         ],
-                        Localization.ENG,
+                        { locale: Localization.ENG },
                     ),
                 },
                 fullInfo: [
@@ -492,22 +466,24 @@ export default class DriverLicenseDataMapper implements DocumentDataMapper {
                             ],
                         },
                     },
+                    {
+                        verificationCodesOrg: {},
+                    },
                 ],
             }
 
             if (isExpiredIssuedFirst) {
                 inactiveLicenseEntries.push(licenseEntity)
 
-                return
+                continue
             }
 
             licenseEntities.push(licenseEntity)
-        })
+        }
 
-        return licenseEntities.length ? licenseEntities : inactiveLicenseEntries
+        return licenseEntities.length > 0 ? licenseEntities : inactiveLicenseEntries
     }
 
-    // TODO(BACK-3092) create and use common entity
     toVerifyDocumentInstance(driverLicense: DriverLicense, localization: Localization): DocumentInstance {
         const {
             id,
@@ -564,9 +540,9 @@ export default class DriverLicenseDataMapper implements DocumentDataMapper {
             frontCard: {
                 UA:
                     localization === Localization.UA
-                        ? this.designSystemDataMapper.getFrontCardWithPhotoDefault(
+                        ? this.designSystemDataMapper.getFrontCard(
                               this.docNameByLocaleMap[Localization.UA],
-                              DocumentTypeCamelCase.driverLicense,
+                              DocumentTypeCamelCase.DriverLicense,
                               fullNameUaWithSeparator,
                               tickerAtmUA,
                               [
@@ -595,15 +571,14 @@ export default class DriverLicenseDataMapper implements DocumentDataMapper {
                                       },
                                   },
                               ],
-                              Localization.UA,
-                              true,
+                              { withEllipseMenu: false },
                           )
                         : [],
                 EN:
                     localization === Localization.ENG
-                        ? this.designSystemDataMapper.getFrontCardWithPhotoDefault(
+                        ? this.designSystemDataMapper.getFrontCard(
                               this.docNameByLocaleMap[Localization.ENG],
-                              DocumentTypeCamelCase.driverLicense,
+                              DocumentTypeCamelCase.DriverLicense,
                               fullNameEnWithSeparator,
                               tickerAtmEN,
                               [
@@ -632,8 +607,7 @@ export default class DriverLicenseDataMapper implements DocumentDataMapper {
                                       },
                                   },
                               ],
-                              Localization.ENG,
-                              true,
+                              { locale: Localization.ENG, withEllipseMenu: false },
                           )
                         : [],
             },
@@ -842,7 +816,7 @@ export default class DriverLicenseDataMapper implements DocumentDataMapper {
     }
 
     private isIssuedLicense(license: DriverLicenseDocumentDTO): boolean {
-        return parseInt(<string>license.status.ID, 10) === DocumentStatus.ISSUED
+        return Number.parseInt(<string>license.status.ID, 10) === DocumentStatus.ISSUED
     }
 
     private stayLicensesOnly(licenses: DriverLicenseDocumentDTO[]): DriverLicenseDocumentDTO[] {
@@ -850,7 +824,7 @@ export default class DriverLicenseDataMapper implements DocumentDataMapper {
     }
 
     private isStayLicense(license: DriverLicenseDocumentDTO): boolean {
-        return parseInt(<string>license.status.ID, 10) === DocumentStatus.STAY
+        return Number.parseInt(<string>license.status.ID, 10) === DocumentStatus.STAY
     }
 
     private returnedLicensesOnly(licenses: DriverLicenseDocumentDTO[]): DriverLicenseDocumentDTO[] {
@@ -858,7 +832,7 @@ export default class DriverLicenseDataMapper implements DocumentDataMapper {
     }
 
     private isReturnedLicense(license: DriverLicenseDocumentDTO): boolean {
-        return parseInt(<string>license.status.ID, 10) === DocumentStatus.RETURNED_AFTER_KEEPING
+        return Number.parseInt(<string>license.status.ID, 10) === DocumentStatus.RETURNED_AFTER_KEEPING
     }
 
     private needConfirmationLicenseOnly(licenses: DriverLicenseDocumentDTO[]): DriverLicenseDocumentDTO[] {
@@ -866,7 +840,7 @@ export default class DriverLicenseDataMapper implements DocumentDataMapper {
     }
 
     private isNeedConfirmationLicense(license: DriverLicenseDocumentDTO): boolean {
-        return parseInt(<string>license.status.ID, 10) === DocumentStatus.NEED_CONFIRMATION
+        return Number.parseInt(<string>license.status.ID, 10) === DocumentStatus.NEED_CONFIRMATION
     }
 
     private migrationLicensesOnly(licenses: DriverLicenseDocumentDTO[]): DriverLicenseDocumentDTO[] {
@@ -874,7 +848,7 @@ export default class DriverLicenseDataMapper implements DocumentDataMapper {
     }
 
     private isLicenseInMigration(license: DriverLicenseDocumentDTO): boolean {
-        return parseInt(<string>license.status.ID, 10) === DocumentStatus.MIGRATION
+        return Number.parseInt(<string>license.status.ID, 10) === DocumentStatus.MIGRATION
     }
 
     private licensesWithoutPhotoOnly(licenses: DriverLicenseDocumentDTO[]): DriverLicenseDocumentDTO[] {
@@ -890,7 +864,7 @@ export default class DriverLicenseDataMapper implements DocumentDataMapper {
     }
 
     private isBirthAddress(address: ClientAddress): boolean {
-        return parseInt(<string>address.addressType.ID, 10) === AddressType.BIRTH
+        return Number.parseInt(<string>address.addressType.ID, 10) === AddressType.BIRTH
     }
 
     private getDocStatus(

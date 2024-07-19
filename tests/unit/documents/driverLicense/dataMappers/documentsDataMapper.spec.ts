@@ -7,10 +7,11 @@ jest.mock('compare-versions', () => ({ compare: compareVersionsMock.compare }))
 import { IdentifierService } from '@diia-inhouse/crypto'
 import DiiaLogger from '@diia-inhouse/diia-logger'
 import TestKit, { mockInstance } from '@diia-inhouse/test'
-import { DocumentType, LicenseType, OwnerType, UserDocumentSubtype } from '@diia-inhouse/types'
+import { OwnerType } from '@diia-inhouse/types'
 
 import DriverLicenseDataMapper from '@src/documents/driverLicense/dataMappers/document'
 import { PluginConfig } from '@src/documents/driverLicense/interfaces/config'
+import { DocumentType, DriverLicense, LicenseType, UserDocumentSubtype } from '@src/documents/driverLicense/interfaces/services'
 
 import DocumentAttributesService from '@services/documentAttributes'
 
@@ -19,9 +20,8 @@ import DocumentsDataMapper from '@dataMappers/documentsDataMapper'
 
 import Utils from '@utils/index'
 
-import PluginDepsCollectionMock from '@mocks/stubs/documentDepsCollection'
-
 import { AppConfig } from '@interfaces/config'
+import { DocumentDataMapper } from '@interfaces/dataMappers'
 import { UserProfileDocument } from '@interfaces/services/user'
 
 describe('DocumentsDataMapper', () => {
@@ -45,22 +45,22 @@ describe('DocumentsDataMapper', () => {
         documentAttributesServiceMock,
     )
 
-    const documentsDataMapper = new DocumentsDataMapper(
-        appUtils,
-        identifier,
-        documentAttributesServiceMock,
-        new PluginDepsCollectionMock([driverLicenseDataMapper]),
-    )
+    const documentsDataMapper = new DocumentsDataMapper(appUtils, identifier, documentAttributesServiceMock, [
+        <DocumentDataMapper<object, string>>(<unknown>driverLicenseDataMapper),
+    ])
+
+    documentsDataMapper.onRegistrationsFinished()
 
     describe(`method: ${documentsDataMapper.toUserProfileDocument.name}`, () => {
         it('should return user profile document for driver license', () => {
-            const document = testKit.docs.getDriverLicense({ type: LicenseType.permanent })
+            const document = <DriverLicense>testKit.docs.generateDocument(DocumentType.DriverLicense, { type: LicenseType.permanent })
 
             const documentIdentifier = '123'
             const ownerType = OwnerType.owner
             const expirationDate = new Date('2025-01-01')
             const issueDate = new Date('2021-01-01')
 
+            // eslint-disable-next-line unicorn/no-useless-undefined
             jest.spyOn(appUtils, 'getDocumentSubType').mockReturnValueOnce(undefined)
             jest.spyOn(appUtils, 'getDocumentOwnerType').mockReturnValueOnce(ownerType)
             jest.spyOn(appUtils, 'getDocumentExpirationDate').mockReturnValueOnce(expirationDate)

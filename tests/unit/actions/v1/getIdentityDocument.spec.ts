@@ -1,10 +1,12 @@
 import { NotFoundError } from '@diia-inhouse/errors'
 import TestKit, { mockInstance } from '@diia-inhouse/test'
-import { DocumentType } from '@diia-inhouse/types'
 
 import GetIdentityDocumentAction from '@actions/v1/getIdentityDocument'
 
 import DocumentsService from '@services/documents'
+
+import { InternalPassportInstance } from '@interfaces/providers/eis'
+import { PassportDocumentType } from '@interfaces/services/passport'
 
 describe(`Action ${GetIdentityDocumentAction.name}`, () => {
     const testKit = new TestKit()
@@ -18,6 +20,7 @@ describe(`Action ${GetIdentityDocumentAction.name}`, () => {
             session,
         }
 
+        // eslint-disable-next-line unicorn/no-useless-undefined
         jest.spyOn(documentsService, 'getIdentityDocument').mockResolvedValueOnce(undefined)
 
         await expect(action.handler(args)).rejects.toThrow(new NotFoundError('Identity document not found'))
@@ -32,9 +35,9 @@ describe(`Action ${GetIdentityDocumentAction.name}`, () => {
         }
 
         const identity = {
-            ...testKit.docs.getInternalPassport(),
+            ...(<InternalPassportInstance>testKit.docs.generateDocument(PassportDocumentType.InternalPassport)),
             department: 'department',
-            identityType: DocumentType.InternalPassport,
+            identityType: PassportDocumentType.InternalPassport,
         }
 
         jest.spyOn(documentsService, 'getIdentityDocument').mockResolvedValueOnce(identity)

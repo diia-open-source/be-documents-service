@@ -1,9 +1,8 @@
-import { FilterQuery, Model } from 'mongoose'
-
+import { FilterQuery, Model } from '@diia-inhouse/db'
 import DiiaLogger from '@diia-inhouse/diia-logger'
 import { DatabaseError, NotFoundError } from '@diia-inhouse/errors'
 import { mockInstance } from '@diia-inhouse/test'
-import { DocumentType, HttpStatusCode } from '@diia-inhouse/types'
+import { HttpStatusCode } from '@diia-inhouse/types'
 
 import ArchiveService from '@services/archive'
 
@@ -24,7 +23,7 @@ describe('archiveService', () => {
     const generateDocumentSetting = (): DocumentSetting =>
         <DocumentSetting>{
             _id: id++,
-            type: <DocumentType>'document-type',
+            type: 'document-type',
             version: DocumentSettingVersion.V1,
             expirationTime: {
                 [ExpirationType.Success]: HttpStatusCode.OK,

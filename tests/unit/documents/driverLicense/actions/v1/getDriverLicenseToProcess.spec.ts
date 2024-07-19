@@ -3,6 +3,7 @@ import TestKit, { mockInstance } from '@diia-inhouse/test'
 import { DocStatus } from '@diia-inhouse/types'
 
 import GetDriverLicenseToProcessAction from '@src/documents/driverLicense/actions/v1/getDriverLicenseToProcess'
+import { DocumentType, DriverLicense } from '@src/documents/driverLicense/interfaces/services'
 import DriverLicenseService from '@src/documents/driverLicense/services/document'
 
 describe(`Action ${GetDriverLicenseToProcessAction.name}`, () => {
@@ -15,12 +16,8 @@ describe(`Action ${GetDriverLicenseToProcessAction.name}`, () => {
         const args = { session, headers }
 
         const driverLicense = [
-            {
-                ...testKit.docs.getDriverLicense({ docStatus: DocStatus.Ok }),
-            },
-            {
-                ...testKit.docs.getDriverLicense({ docStatus: DocStatus.Confirming }),
-            },
+            { ...(<DriverLicense>testKit.docs.generateDocument(DocumentType.DriverLicense, { docStatus: DocStatus.Ok })) },
+            { ...(<DriverLicense>testKit.docs.generateDocument(DocumentType.DriverLicense, { docStatus: DocStatus.Confirming })) },
         ]
 
         jest.spyOn(driverLicenseService, 'getDriverLicenses').mockResolvedValueOnce(driverLicense)
@@ -45,7 +42,7 @@ describe(`Action ${GetDriverLicenseToProcessAction.name}`, () => {
         const { session, headers } = testKit.session.getUserActionArguments()
         const args = { session, headers }
 
-        const driverLicense = [{ ...testKit.docs.getDriverLicense() }]
+        const driverLicense = [{ ...(<DriverLicense>testKit.docs.generateDocument(DocumentType.DriverLicense)) }]
 
         jest.spyOn(driverLicenseService, 'getDriverLicenses').mockResolvedValueOnce(driverLicense)
 

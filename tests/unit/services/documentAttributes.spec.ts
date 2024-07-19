@@ -1,32 +1,22 @@
-import { AsyncLocalStorage } from 'async_hooks'
+import { AsyncLocalStorage } from 'node:async_hooks'
 
 import moment from 'moment'
 
 import { InternalServerError } from '@diia-inhouse/errors'
 import TestKit from '@diia-inhouse/test'
-import {
-    ActHeaders,
-    AlsData,
-    DocStatus,
-    DocumentType,
-    Localization,
-    PlatformType,
-    TickerAtmType,
-    TickerAtmUsage,
-} from '@diia-inhouse/types'
+import { AlsData, DocStatus, Localization, PlatformType, TickerAtm, TickerAtmType, TickerAtmUsage } from '@diia-inhouse/types'
 
 import DocumentAttributesService from '@services/documentAttributes'
 
-import PluginDepsCollectionMock from '@mocks/stubs/documentDepsCollection'
-
 import { DocumentTickerCode } from '@interfaces/services/documentAttributes'
+import { PassportDocumentType } from '@interfaces/services/passport'
 
 describe(`Service ${DocumentAttributesService.name}`, () => {
     const testKit = new TestKit()
     const now = new Date()
     const nowFormatted = moment(now).format('HH:mm | DD.MM.YYYY')
     const asyncLocalStorage = <AsyncLocalStorage<AlsData>>(<unknown>{ getStore: jest.fn() })
-    const service = new DocumentAttributesService(new PluginDepsCollectionMock([]), asyncLocalStorage)
+    const service = new DocumentAttributesService([], asyncLocalStorage)
 
     beforeAll(() => {
         jest.useFakeTimers({ now })
@@ -38,7 +28,7 @@ describe(`Service ${DocumentAttributesService.name}`, () => {
 
     describe(`method ${service.getCover.name}`, () => {
         it('should return undefined if no cover found for passed document type and document status', () => {
-            const result = service.getCover(DocumentType.MilitaryBond, DocStatus.NoPhoto)
+            const result = service.getCover('docuemnt-type', DocStatus.NoPhoto)
 
             expect(result).toBeUndefined()
         })
@@ -47,7 +37,7 @@ describe(`Service ${DocumentAttributesService.name}`, () => {
     describe(`method ${service.getTicker.name}`, () => {
         it('should throw error if ticker is not defined for passed params', () => {
             const params = {
-                documentType: <DocumentType>'unknown',
+                documentType: 'unknown',
                 code: DocumentTickerCode.OneDose,
                 templateParams: { validUntil: '2039-10-11', updatedAt: '2020-10-10' },
                 localization: Localization.ENG,
@@ -58,13 +48,15 @@ describe(`Service ${DocumentAttributesService.name}`, () => {
     })
 
     describe(`method ${service.getDefaultTicker.name}`, () => {
-        it.each([
+        it.each(<[Localization, TickerAtm][]>[
             [
                 Localization.ENG,
                 {
                     usage: TickerAtmUsage.document,
                     type: TickerAtmType.positive,
                     value: `Document updated on ${nowFormatted} • Document updated on ${nowFormatted} • `,
+                    componentId: 'ticker_eng',
+                    action: undefined,
                 },
             ],
             [
@@ -73,6 +65,8 @@ describe(`Service ${DocumentAttributesService.name}`, () => {
                     usage: TickerAtmUsage.document,
                     type: TickerAtmType.positive,
                     value: `Документ оновлено о ${nowFormatted} • Документ оновлено о ${nowFormatted} • `,
+                    componentId: 'ticker_ua',
+                    action: undefined,
                 },
             ],
         ])('should return default ticker for %s localization', (localization, expected) => {
@@ -85,32 +79,18 @@ describe(`Service ${DocumentAttributesService.name}`, () => {
     describe(`method ${service.getTrident.name}`, () => {
         it.each([
             [
-                `with space prefix when platform type is ${PlatformType.iOS}, app version is 3.0.43.906 and document type id ${DocumentType.ForeignPassport}`,
+                `with space prefix when platform type is ${PlatformType.iOS}, app version is 3.0.43.906 and document type id ${PassportDocumentType.ForeignPassport}`,
                 { headers: testKit.session.getHeaders({ platformType: PlatformType.iOS, appVersion: '3.0.43.906' }) },
-                DocumentType.ForeignPassport,
+                PassportDocumentType.ForeignPassport,
                 ' |_|_|',
             ],
             [
-                `when platform type is ${PlatformType.iOS}, app version is 3.0.43.906 and document type id ${DocumentType.BirthCertificate}`,
-                { headers: testKit.session.getHeaders({ platformType: PlatformType.iOS, appVersion: '3.0.43.906' }) },
-                DocumentType.BirthCertificate,
-                '|_|_|',
-            ],
-            [
-                `when platform type is ${PlatformType.Browser} and document type id ${DocumentType.ForeignPassport}`,
+                `when platform type is ${PlatformType.Browser} and document type id ${PassportDocumentType.ForeignPassport}`,
                 { headers: testKit.session.getHeaders({ platformType: PlatformType.Browser }) },
-                DocumentType.ForeignPassport,
+                PassportDocumentType.ForeignPassport,
                 '|_|_|',
             ],
-            ['when store was not initialized', undefined, DocumentType.ForeignPassport, '|_|_|'],
-            ['when store has no headers', {}, DocumentType.DriverLicense, '|_|_|'],
-            ['when headers has no platform type', { headers: <ActHeaders>{ appVersion: '3.0.5.6' } }, DocumentType.DriverLicense, '|_|_|'],
-            [
-                'when headers has no app version',
-                { headers: <ActHeaders>{ platformType: PlatformType.Android } },
-                DocumentType.DriverLicense,
-                '|_|_|',
-            ],
+            ['when store was not initialized', undefined, PassportDocumentType.ForeignPassport, '|_|_|'],
         ])('should return trident %s', (_msg, alsData, documentType, expected) => {
             const getStoreSpy = jest.spyOn(asyncLocalStorage, 'getStore').mockReturnValueOnce(alsData)
 

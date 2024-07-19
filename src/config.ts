@@ -2,21 +2,18 @@ import { BalancingStrategy, MetricsConfig, TransporterConfig } from '@diia-inhou
 
 import { AuthConfig, IdentifierConfig } from '@diia-inhouse/crypto'
 import { AppDbConfig, ReplicaSetNodeConfig } from '@diia-inhouse/db'
-import { ListenerOptions, QueueConfig, QueueConnectionConfig, QueueConnectionType } from '@diia-inhouse/diia-queue'
+import { QueueConnectionConfig } from '@diia-inhouse/diia-queue'
 import { EnvService } from '@diia-inhouse/env'
 import { HealthCheckConfig } from '@diia-inhouse/healthcheck'
 import { RedisConfig } from '@diia-inhouse/redis'
 import { DurationMs, DurationS } from '@diia-inhouse/types'
 
 import { getConfigs as getPluginConfigs } from '@src/documents/config'
+import getQueueConfig from '@src/queueConfig'
 
 // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
 export default async (envService: EnvService, serviceName: string) => {
-    const [mongoUser, mongoPassword, pluginConfigs] = await Promise.all([
-        envService.getSecret('MONGO_USER', 'username'),
-        envService.getSecret('MONGO_PASSWORD', 'password'),
-        getPluginConfigs(envService, serviceName),
-    ])
+    const { queueConfig: queuePluginConfig, ...genericPluginConfigs } = await getPluginConfigs(envService, serviceName)
 
     return {
         isMoleculerEnabled: true,
@@ -33,8 +30,8 @@ export default async (envService: EnvService, serviceName: string) => {
         db: <AppDbConfig>{
             database: process.env.MONGO_DATABASE,
             replicaSet: process.env.MONGO_REPLICA_SET,
-            user: mongoUser,
-            password: mongoPassword,
+            user: await envService.getSecret('MONGO_USER', { accessor: 'username', nullable: true }),
+            password: await envService.getSecret('MONGO_PASSWORD', { accessor: 'password', nullable: true }),
             authSource: process.env.MONGO_AUTH_SOURCE,
             port: envService.getVar('MONGO_PORT', 'number'),
             replicaSetNodes: envService
@@ -58,52 +55,7 @@ export default async (envService: EnvService, serviceName: string) => {
             readOnly: envService.getVar('STORE_READ_ONLY_OPTIONS', 'object'),
         },
 
-        rabbit: <QueueConnectionConfig>{
-            [QueueConnectionType.Internal]: <QueueConfig>{
-                connection: {
-                    hostname: process.env.RABBIT_HOST,
-                    port: process.env.RABBIT_PORT ? envService.getVar('RABBIT_PORT', 'number') : undefined,
-                    username: process.env.RABBIT_USERNAME,
-                    password: process.env.RABBIT_PASSWORD,
-                    heartbeat: process.env.RABBIT_HEARTBEAT ? envService.getVar('RABBIT_HEARTBEAT', 'number') : undefined,
-                },
-                socketOptions: {
-                    clientProperties: {
-                        applicationName: `${serviceName} Service`,
-                    },
-                },
-                reconnectOptions: {
-                    reconnectEnabled: true,
-                },
-                listenerOptions: <ListenerOptions>{
-                    prefetchCount: envService.getVar('RABBIT_QUEUE_PREFETCH_COUNT', 'number', 10),
-                },
-            },
-            [QueueConnectionType.External]: <QueueConfig>{
-                connection: {
-                    hostname: process.env.EXTERNAL_RABBIT_HOST,
-                    port: process.env.EXTERNAL_RABBIT_PORT ? envService.getVar('EXTERNAL_RABBIT_PORT', 'number') : undefined,
-                    username: process.env.EXTERNAL_RABBIT_USERNAME,
-                    password: process.env.EXTERNAL_RABBIT_PASSWORD,
-                    heartbeat: process.env.EXTERNAL_RABBIT_HEARTBEAT ? envService.getVar('EXTERNAL_RABBIT_HEARTBEAT', 'number') : undefined,
-                },
-                socketOptions: {
-                    clientProperties: {
-                        applicationName: `${serviceName} Service`,
-                    },
-                },
-                reconnectOptions: {
-                    reconnectEnabled: true,
-                },
-                listenerOptions: <ListenerOptions>{
-                    prefetchCount: envService.getVar('EXTERNAL_RABBIT_QUEUE_PREFETCH_COUNT', 'number', 1),
-                },
-                assertExchanges: envService.getVar('EXTERNAL_RABBIT_ASSERT_EXCHANGES', 'boolean', false),
-                custom: {
-                    responseRoutingKeyPrefix: process.env.EXTERNAL_RABBIT_RESPONSE_ROUTING_KEY_PREFIX,
-                },
-            },
-        },
+        rabbit: getQueueConfig(serviceName, envService, <QueueConnectionConfig>queuePluginConfig),
 
         healthCheck: <HealthCheckConfig>{
             isEnabled: envService.getVar('HEALTH_CHECK_IS_ENABLED', 'boolean'),
@@ -128,6 +80,8 @@ export default async (envService: EnvService, serviceName: string) => {
                 },
                 disableDefaultMetrics: envService.getVar('METRICS_CUSTOM_DISABLE_DEFAULT_METRICS', 'boolean', false),
                 defaultLabels: envService.getVar('METRICS_CUSTOM_DEFAULT_LABELS', 'object', {}),
+                responseTimingBuckets: [0.001, 0.005, 0.01, 0.05, 0.1, 0.2, 0.5, 0.7, 1, 5, 10, 15, 20, 30, 40],
+                requestTimingBuckets: [0.01, 0.05, 0.1, 0.2, 0.5, 0.7, 1, 5, 10, 20, 40, 60],
             },
         },
 
@@ -174,12 +128,21 @@ export default async (envService: EnvService, serviceName: string) => {
         grpc: {
             isEnabled: envService.getVar('GRPC_CLIENT_ENABLED', 'boolean', false),
             govGateway: envService.getVar('GRPC_GOV_GATEWAY', 'string', 'gov-gateway-grpc:5000'),
+            userServiceAddress: envService.getVar('GRPC_USER_SERVICE_ADDRESS', 'string'),
+        },
+
+        grpcServer: {
+            isEnabled: envService.getVar('GRPC_SERVER_ENABLED', 'boolean', false),
+            port: envService.getVar('GRPC_SERVER_PORT', 'number', 5000),
+            services: envService.getVar('GRPC_SERVICES', 'object', []),
+            isReflectionEnabled: envService.getVar('GRPC_REFLECTION_ENABLED', 'boolean', false),
+            maxReceiveMessageLength: envService.getVar('GRPC_SERVER_MAX_RECEIVE_MESSAGE_LENGTH', 'number', 1024 * 1024 * 4),
         },
 
         archive: {
             docsPerIteration: envService.getVar('ARCHIVE_DOCUMENTS_PER_ITERATION', 'number', 100),
         },
 
-        ...pluginConfigs,
+        ...genericPluginConfigs,
     }
 }

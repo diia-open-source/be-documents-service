@@ -1,14 +1,23 @@
 import { AppAction } from '@diia-inhouse/diia-app'
 
-import { ActionVersion, DocumentType, SessionType } from '@diia-inhouse/types'
+import { ActionVersion, SessionType } from '@diia-inhouse/types'
 import { ValidationSchema } from '@diia-inhouse/validators'
 
+import DocumentsService from '@services/documents'
 import DocumentVerificationService from '@services/documentVerification'
 
 import { ActionResult, CustomActionArguments } from '@interfaces/actions/v1/verifyServiceEntranceDocument'
 
 export default class VerifyServiceEntranceDocumentAction implements AppAction {
-    constructor(private readonly documentVerificationService: DocumentVerificationService) {}
+    constructor(
+        private readonly documentsService: DocumentsService,
+        private readonly documentVerificationService: DocumentVerificationService,
+    ) {
+        this.validationRules = {
+            documentType: { type: 'string', enum: this.documentsService.documentTypes },
+            otp: { type: 'uuid' },
+        }
+    }
 
     readonly sessionType: SessionType = SessionType.ServiceEntrance
 
@@ -16,10 +25,7 @@ export default class VerifyServiceEntranceDocumentAction implements AppAction {
 
     readonly name: string = 'verifyServiceEntranceDocument'
 
-    readonly validationRules: ValidationSchema<CustomActionArguments['params']> = {
-        documentType: { type: 'string', enum: Object.values(DocumentType) },
-        otp: { type: 'uuid' },
-    }
+    readonly validationRules: ValidationSchema<CustomActionArguments['params']>
 
     async handler(args: CustomActionArguments): Promise<ActionResult> {
         const {

@@ -1,4 +1,4 @@
-import { LicenseCategory } from '@diia-inhouse/types'
+import { LicenseCategory } from '@src/documents/driverLicense/interfaces/services'
 
 import { Client, ClientAddress, IdWithValue } from '@interfaces/dto/client'
 

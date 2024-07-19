@@ -2,7 +2,7 @@ import moment from 'moment'
 
 import { ExternalCommunicator } from '@diia-inhouse/diia-queue'
 import TestKit from '@diia-inhouse/test'
-import { AppUser, DocumentType, HttpStatusCode } from '@diia-inhouse/types'
+import { AppUser, HttpStatusCode } from '@diia-inhouse/types'
 
 import GetDocumentsToProcessAction from '@actions/v1/getDocumentsToProcess'
 
@@ -11,8 +11,9 @@ import DocumentsService from '@services/documents'
 import { getPassport } from '@tests/mocks/stubs/providers/eis/passport'
 import { getApp } from '@tests/utils/getApp'
 
-import { RnokppErrorCode } from '@interfaces/providers/drfo'
+import { ForeignPassportInstance, InternalPassportInstance } from '@interfaces/providers/eis'
 import { Document } from '@interfaces/services/documents'
+import { PassportDocumentType } from '@interfaces/services/passport'
 
 describe(`Action ${GetDocumentsToProcessAction.name}`, () => {
     process.env.EDDR_IS_ENABLED = 'true'
@@ -40,38 +41,31 @@ describe(`Action ${GetDocumentsToProcessAction.name}`, () => {
 
     it.each([
         [
-            DocumentType.InternalPassport,
-            (): Document[] => [testKit.docs.getInternalPassport({ id: '20000213-01467-2016-03-09' })],
-            (): void => {
-                jest.spyOn(external, 'receiveDirect').mockResolvedValueOnce(getPassport())
-            },
-        ],
-        [
-            DocumentType.ForeignPassport,
-            ({ itn }: AppUser): Document[] => [
-                testKit.docs.getForeignPassport({
-                    id: expect.any(String),
-                    fullNameHash: expect.any(String),
-                    tickerOptions: expect.anything(),
-                    ua: expect.anything(),
-                    eng: expect.anything(),
-                    taxpayerCard: { number: itn, creationDate: moment().format('DD.MM.YYYY') },
-                }),
+            PassportDocumentType.InternalPassport,
+            (): Document[] => [
+                <InternalPassportInstance>(
+                    testKit.docs.generateDocument(PassportDocumentType.InternalPassport, { id: '20000213-01467-2016-03-09' })
+                ),
             ],
             (): void => {
                 jest.spyOn(external, 'receiveDirect').mockResolvedValueOnce(getPassport())
             },
         ],
         [
-            <DocumentType>DocumentType.TaxpayerCard,
-            ({ birthDay, identifier, itn }: AppUser): Document[] => [<Document>(<unknown>testKit.docs.getTaxpayerCard({
-                    birthday: birthDay,
-                    creationDate: moment().format('DD.MM.YYYY'),
-                    docNumber: itn,
-                    id: identifier,
-                }))],
+            PassportDocumentType.ForeignPassport,
+            ({ itn }: AppUser): Document[] => [<ForeignPassportInstance>testKit.docs.generateDocument(
+                    PassportDocumentType.ForeignPassport,
+                    {
+                        id: expect.any(String),
+                        fullNameHash: expect.any(String),
+                        tickerOptions: expect.anything(),
+                        ua: expect.anything(),
+                        eng: expect.anything(),
+                        taxpayerCard: { number: itn, creationDate: moment().format('DD.MM.YYYY') },
+                    },
+                )],
             (): void => {
-                jest.spyOn(external, 'receiveDirect').mockResolvedValueOnce({ error: RnokppErrorCode.Ok })
+                jest.spyOn(external, 'receiveDirect').mockResolvedValueOnce(getPassport())
             },
         ],
     ])(`should return %s`, async (documentFilter, getExpectedDocuments, setupSpies) => {
@@ -101,7 +95,7 @@ describe(`Action ${GetDocumentsToProcessAction.name}`, () => {
         const { session, headers } = testKit.session.getUserActionArguments()
 
         // Act
-        const result = await action.handler({ session, headers, params: { filter: [<DocumentType>'unknown-doc-type'] } })
+        const result = await action.handler({ session, headers, params: { filter: ['unknown-doc-type'] } })
 
         // Assert
         expect(result).toEqual({})

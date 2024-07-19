@@ -1,14 +1,24 @@
 import { AppAction } from '@diia-inhouse/diia-app'
 
-import { ActionVersion, DocumentType, SessionType } from '@diia-inhouse/types'
+import { ActionVersion, SessionType } from '@diia-inhouse/types'
 import { ValidationSchema } from '@diia-inhouse/validators'
 
+import DocumentsService from '@services/documents'
 import DocumentVerificationService from '@services/documentVerification'
 
 import { ActionResult, CustomActionArguments } from '@interfaces/actions/v1/verifyDocumentByBarcode'
 
 export default class VerifyDocumentByBarcodeAction implements AppAction {
-    constructor(private readonly documentVerificationService: DocumentVerificationService) {}
+    constructor(
+        private readonly documentsService: DocumentsService,
+        private readonly documentVerificationService: DocumentVerificationService,
+    ) {
+        this.validationRules = {
+            documentType: { type: 'string', enum: this.documentsService.documentTypes },
+            barcode: { type: 'string' },
+            branchId: { type: 'objectId' },
+        }
+    }
 
     readonly sessionType: SessionType = SessionType.None
 
@@ -16,11 +26,7 @@ export default class VerifyDocumentByBarcodeAction implements AppAction {
 
     readonly name: string = 'verifyDocumentByBarcode'
 
-    readonly validationRules: ValidationSchema = {
-        documentType: { type: 'string', enum: Object.values(DocumentType) },
-        barcode: { type: 'string' },
-        branchId: { type: 'objectId' },
-    }
+    readonly validationRules: ValidationSchema
 
     async handler(args: CustomActionArguments): Promise<ActionResult> {
         const {

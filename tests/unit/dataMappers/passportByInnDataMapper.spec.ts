@@ -209,7 +209,7 @@ describe('PassportByInnDataMapper', () => {
 
             expect(passportByInnDataMapper.toPassportByInnRegistrationFromPassportRegistration(passportRegistrationInfo)).toEqual({
                 address: {
-                    registration_inf: !!passportRegistrationInfo.fullName,
+                    registration_inf: Boolean(passportRegistrationInfo.fullName),
                     postbox: passportRegistrationInfo.address.postbox,
                     address_koatuu: passportRegistrationInfo.address.addressKoatuu,
                     address_katottg: passportRegistrationInfo.address.addressKatottg,

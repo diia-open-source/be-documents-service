@@ -1,4 +1,6 @@
-import { DocStatus, DocumentType, Localization, PlatformType, TickerAtm, TickerAtmType, TickerAtmUsage } from '@diia-inhouse/types'
+import { DocStatus, Localization, PlatformType, TickerAtm, TickerAtmType, TickerAtmUsage } from '@diia-inhouse/types'
+
+import { DocumentType } from '@src/documents/driverLicense/interfaces/services'
 
 import { DocumentCover, DocumentTicker, DocumentTickerCode, DocumentTickerPlaceholder } from '@interfaces/services/documentAttributes'
 import { DocumentAttributesService } from '@interfaces/services/documents'

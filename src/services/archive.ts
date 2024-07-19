@@ -1,7 +1,4 @@
-import { ObjectId } from 'bson'
-import { AnyBulkWriteOperation } from 'mongodb'
-import { AnyObject, Document, FilterQuery, Model } from 'mongoose'
-
+import { AnyBulkWriteOperation, AnyObject, Document, FilterQuery, Model, ObjectId } from '@diia-inhouse/db'
 import { DatabaseError } from '@diia-inhouse/errors'
 import { Logger } from '@diia-inhouse/types'
 
@@ -32,7 +29,7 @@ export default class ArchiveService {
 
         for (let i = 0; i < iterations; i++) {
             const docs: Document[] = await sourceModel.find(query).limit(docsPerIteration)
-            if (!docs.length) {
+            if (docs.length === 0) {
                 this.logger.debug(`${colName}: No more docs to archive`)
                 break
             }

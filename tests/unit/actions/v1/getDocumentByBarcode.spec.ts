@@ -1,8 +1,8 @@
 import TestKit, { mockInstance } from '@diia-inhouse/test'
-import { DocumentType } from '@diia-inhouse/types'
 
 import GetDocumentByBarcodeAction from '@actions/v1/getDocumentByBarcode'
 
+import DocumentsService from '@services/documents'
 import DocumentVerificationService from '@services/documentVerification'
 
 import { Document } from '@interfaces/services/documents'
@@ -10,13 +10,14 @@ import { Document } from '@interfaces/services/documents'
 describe(`Action ${GetDocumentByBarcodeAction.name}`, () => {
     const testKit = new TestKit()
     const documentVerificationService = mockInstance(DocumentVerificationService)
-    const action = new GetDocumentByBarcodeAction(documentVerificationService)
+    const documentsServiceMock = mockInstance(DocumentsService)
+    const action = new GetDocumentByBarcodeAction(documentsServiceMock, documentVerificationService)
 
     it('should return document by bar code', async () => {
         const headers = testKit.session.getHeaders()
         const args = {
             params: {
-                documentType: <DocumentType>'document-type',
+                documentType: 'document-type',
                 barcode: 'barcode',
             },
             headers,

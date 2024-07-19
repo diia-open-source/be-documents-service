@@ -1,13 +1,12 @@
-import { Document } from 'mongoose'
-
-import { DocStatus, DocumentType, Localization, OwnerType } from '@diia-inhouse/types'
+import { Document } from '@diia-inhouse/db'
+import { DocStatus, Localization, OwnerType } from '@diia-inhouse/types'
 
 export interface DocumentVerificationOtp {
     userIdentifier: string
     documentId: string
     requestorJWE: string
     consumerJWE?: string
-    registryDocumentType: DocumentType
+    registryDocumentType: string
     hash: string
     ownerType: OwnerType
     docStatus: DocStatus

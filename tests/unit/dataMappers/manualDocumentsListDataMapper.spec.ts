@@ -1,8 +1,6 @@
-import { DocumentType } from '@diia-inhouse/types'
-
 import ManualDocumentsListDataMapper from '@dataMappers/manualDocumentsListDataMapper'
 
-import PluginDepsCollectionMock, { getDocumentDataMapper } from '@mocks/stubs/documentDepsCollection'
+import { getDocumentDataMapper } from '@mocks/stubs/documentDepsCollection'
 
 describe('ManualDocumentsListDataMapper', () => {
     const manualDocumentsList = [
@@ -19,7 +17,9 @@ describe('ManualDocumentsListDataMapper', () => {
             order: 2,
         },
     ]
-    const dataMapper = new ManualDocumentsListDataMapper(new PluginDepsCollectionMock([getDocumentDataMapper({ manualDocumentsList })]))
+    const dataMapper = new ManualDocumentsListDataMapper([getDocumentDataMapper({ manualDocumentsList })])
+
+    dataMapper.onRegistrationsFinished()
 
     describe('method getActiveManualDocumentsList', () => {
         it('should return manual documents list which are active', () => {
@@ -36,7 +36,7 @@ describe('ManualDocumentsListDataMapper', () => {
                 isActive: true,
                 name: 'name',
                 order: 100,
-                hiddenIfAnyOfDocumentsOwned: [<DocumentType>'document-type'],
+                hiddenIfAnyOfDocumentsOwned: ['document-type'],
             }
             const { hiddenIfAnyOfDocumentsOwned, order, ...documentWithoutMeta } = manualDocument
 

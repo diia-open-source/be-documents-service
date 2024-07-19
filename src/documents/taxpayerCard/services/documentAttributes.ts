@@ -1,4 +1,6 @@
-import { DocStatus, DocumentType, Localization, TickerAtm, TickerAtmType, TickerAtmUsage } from '@diia-inhouse/types'
+import { DocStatus, Localization, TickerAtm, TickerAtmType, TickerAtmUsage } from '@diia-inhouse/types'
+
+import { DocumentType } from '@src/documents/taxpayerCard/interfaces/services'
 
 import { DocumentCover, DocumentTicker, DocumentTickerCode, DocumentTickerPlaceholder } from '@interfaces/services/documentAttributes'
 import { DocumentAttributesService } from '@interfaces/services/documents'

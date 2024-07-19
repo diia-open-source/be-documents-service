@@ -7,6 +7,9 @@ import PassportService from '@services/passport'
 
 import PassportDataMapper from '@dataMappers/passportDataMapper'
 
+import { ForeignPassportInstance, InternalPassportInstance } from '@interfaces/providers/eis'
+import { PassportDocumentType } from '@interfaces/services/passport'
+
 describe(`Action ${GetPassportToProcessAction.name}`, () => {
     const testKit = new TestKit()
     const documentsService = mockInstance(DocumentsService)
@@ -22,7 +25,7 @@ describe(`Action ${GetPassportToProcessAction.name}`, () => {
             session,
         }
 
-        const passport = testKit.docs.getInternalPassport()
+        const passport: InternalPassportInstance = testKit.docs.generateDocument(PassportDocumentType.InternalPassport)
 
         jest.spyOn(passportService, 'getPassportToProcess').mockResolvedValueOnce(passport)
 
@@ -38,7 +41,7 @@ describe(`Action ${GetPassportToProcessAction.name}`, () => {
             session,
         }
 
-        const passport = testKit.docs.getForeignPassport()
+        const passport: ForeignPassportInstance = testKit.docs.generateDocument(PassportDocumentType.ForeignPassport)
 
         jest.spyOn(passportService, 'getPassportToProcess').mockResolvedValueOnce(passport)
 

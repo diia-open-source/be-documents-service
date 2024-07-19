@@ -1,6 +1,7 @@
 import TestKit, { mockInstance } from '@diia-inhouse/test'
 
 import HasValidTaxpayerCardAction from '@src/documents/taxpayerCard/actions/v1/hasValidTaxpayerCard'
+import { DocumentType, TaxpayerCard } from '@src/documents/taxpayerCard/interfaces/services'
 import TaxpayerCardService from '@src/documents/taxpayerCard/services/document'
 
 describe(`Action ${HasValidTaxpayerCardAction.name}`, () => {
@@ -15,7 +16,7 @@ describe(`Action ${HasValidTaxpayerCardAction.name}`, () => {
             headers,
         }
 
-        const taxpayerCard = testKit.docs.getTaxpayerCard()
+        const taxpayerCard = <TaxpayerCard>testKit.docs.generateDocument(DocumentType.TaxpayerCard)
 
         jest.spyOn(taxpayerCardService, 'getValidTaxpayerCard').mockResolvedValueOnce(taxpayerCard)
 

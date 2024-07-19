@@ -6,11 +6,11 @@ import { ActionVersion, SessionType } from '@diia-inhouse/types'
 
 import DocumentsExpirationService from '@services/documentsExpiration'
 
-import { CustomActionArguments, TaxPayerDTO } from '@interfaces/actions/v1/getUserByITN'
+import { CustomActionArguments, TaxPayerDTO } from '@interfaces/actions/v1/getUserByItn'
 import { AppConfig } from '@interfaces/config'
 import { DocumentsMetaData } from '@interfaces/services/documentsMetaData'
 
-export default class GetUserByITNAction implements AppAction {
+export default class GetUserByItnAction implements AppAction {
     constructor(
         private readonly documentsExpirationService: DocumentsExpirationService,
         private readonly config: AppConfig,

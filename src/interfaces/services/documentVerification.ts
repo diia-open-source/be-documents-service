@@ -1,29 +1,27 @@
-import { ObjectId } from 'bson'
-
+import { ObjectId } from '@diia-inhouse/db'
 import {
     ActHeaders,
     AppUserActionHeaders,
     DocStatus,
     DocumentCommon,
-    DocumentInstance,
     DocumentMetaData,
-    DocumentType,
     Localization,
     OwnerType,
+    UserFeatures,
     UserTokenData,
 } from '@diia-inhouse/types'
 
-import { PassportType } from '@interfaces/dto'
 import { Representative } from '@interfaces/providers/eis'
+import { DocumentInstance } from '@interfaces/services'
 
 export interface ShareLinkParams {
-    documentType: DocumentType
+    documentType: string
     documentId: string
     headers: AppUserActionHeaders
-    userIdentifier: string
-    documentAssertParams: AssertParams
-    generateBarcode?: boolean
+    user: UserTokenData
+    features?: UserFeatures
     localization?: Localization
+    serieNumber?: SerieNumberAssertParams
 }
 
 export interface ShareLinkResponse {
@@ -48,39 +46,42 @@ export interface StillValidResult {
     docStatus: DocStatus
 }
 
-export interface AssertParams {
-    checkExpirationDocumentType?: DocumentType
-}
-
-export interface ShareDocumentAssertParams extends AssertParams {
-    itn: string
-}
-
-export interface PassportAssertParams extends AssertParams {
+export interface DocumentAssertParams {
     user: UserTokenData
-    passportType: PassportType
+    features?: UserFeatures
+    serieNumber?: SerieNumberAssertParams
 }
 
-export type DocumentAssertParams = PassportAssertParams
+export interface SerieNumberAssertParams {
+    serie: string
+    number: string
+}
 
 export interface AssertStrategyParams {
     documentId: string
-    documentType: DocumentType
+    documentType: string
     ownerType: OwnerType
-    documentAssertParams: AssertParams
+    documentAssertParams: DocumentAssertParams
 }
 
 export type AssertStrategy = (params: AssertStrategyParams) => Promise<void> | never
 
+export type ShareSettingsStrategy = (documentType: string) => ShareSettings
+
+export interface ShareSettings {
+    generateBarcode: boolean
+    checkExpirationDocumentType?: string
+}
+
 export interface DocumentVerifyParams {
     representative?: Representative
     designSystem?: boolean
-    documentType?: DocumentType
+    documentType?: string
 }
 
 export interface VerifyDocumentParams extends DocumentVerifyParams {
     otp: string
-    documentType: DocumentType
+    documentType: string
     token: string
 }
 
@@ -91,10 +92,10 @@ export type VerificationStrategy = (
 
 export type VerificationByDataStrategy = <T>(qrCode: string, headers: ActHeaders, designSystem: boolean) => Promise<VerificationResponse<T>>
 
-export type DocumentTypeDefinerByQrCodeStrategy = (qrCode: string) => DocumentType | undefined
+export type DocumentTypeDefinerByQrCodeStrategy = (qrCode: string) => string | undefined
 
 export interface VerificationData {
-    registryDocumentType: DocumentType
+    registryDocumentType: string
     expirationDate: Date
     usedDate?: Date
     barcode: string

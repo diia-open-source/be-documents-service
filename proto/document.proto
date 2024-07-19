@@ -1,8 +1,15 @@
 syntax = "proto3";
 
+import "designSystem/organisms/verificationCodesOrg.proto";
+
 package ua.gov.diia.document;
 option java_multiple_files = true;
 option java_package = "ua.gov.diia.document";
+
+enum Localization {
+  ua = 0;
+  eng = 1;
+}
 
 message ShareDocumentReq {
   string documentId = 1;
@@ -10,10 +17,19 @@ message ShareDocumentReq {
   optional string localization = 3;
 }
 
-message ShareDocumentRes {
+message ShareDocumentResV1 {
   string id = 1;
   string link = 2;
   optional string barcode = 3;
   string timerText = 4;
   int32 timerTime = 5;
+}
+
+message ShareDocumentRes {
+  ua.gov.diia.types.ds.organisms.VerificationCodesOrg verificationCodesOrg = 1;
+}
+
+message DocumentTicker {
+  string type = 1;
+  string text = 2;
 }

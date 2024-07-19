@@ -1,4 +1,6 @@
-import { DriverLicense, UserActionArguments } from '@diia-inhouse/types'
+import { UserActionArguments } from '@diia-inhouse/types'
+
+import { DriverLicense } from '@src/documents/driverLicense/interfaces/services'
 
 export type CustomActionArguments = UserActionArguments
 

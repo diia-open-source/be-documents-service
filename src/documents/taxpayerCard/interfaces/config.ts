@@ -1,4 +1,6 @@
-import { DocumentType } from '@diia-inhouse/types'
+import { QueueConnectionConfig } from '@diia-inhouse/diia-queue'
+
+import { DocumentType } from '@src/documents/taxpayerCard/interfaces/services'
 
 export interface PluginConfig {
     [DocumentType.TaxpayerCard]: {
@@ -6,4 +8,10 @@ export interface PluginConfig {
         cardExpirationTimeOnConfirmingSec: number
         cardExpirationTimeOnNotConfirmedSec: number
     }
+    queueConfig: QueueConnectionConfig
+}
+
+export enum ExternalEvent {
+    RepoDocumentRnokpp = 'document.rnokpp',
+    RepoDocumentTaxpayerCard = 'document.taxpayer-card',
 }

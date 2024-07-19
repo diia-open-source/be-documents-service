@@ -1,9 +1,10 @@
 import { AppAction } from '@diia-inhouse/diia-app'
 
 import { NotFoundError, UnprocessableEntityError } from '@diia-inhouse/errors'
-import { ActionVersion, DriverLicense, SessionType } from '@diia-inhouse/types'
+import { ActionVersion, SessionType } from '@diia-inhouse/types'
 
 import { ActionResult, CustomActionArguments } from '@src/documents/driverLicense/interfaces/actions/v1/getDriverLicenseToProcess'
+import { DriverLicense } from '@src/documents/driverLicense/interfaces/services'
 import DriverLicenseService from '@src/documents/driverLicense/services/document'
 
 export default class GetDriverLicenseToProcessAction implements AppAction {

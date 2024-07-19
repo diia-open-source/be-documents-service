@@ -1,6 +1,6 @@
 import { isObject } from 'lodash'
 
-import { ExternalCommunicator, ExternalEvent } from '@diia-inhouse/diia-queue'
+import { ExternalCommunicator } from '@diia-inhouse/diia-queue'
 import { ReceiveDirectOps } from '@diia-inhouse/diia-queue/dist/types/interfaces/externalCommunicator'
 import {
     AccessDeniedError,
@@ -24,6 +24,7 @@ import {
 } from '@interfaces/dto'
 import { DocumentsEisServiceProvider } from '@interfaces/providers'
 import { PassportFull, PassportsRequestData, Person, Representative } from '@interfaces/providers/eis'
+import { ExternalEvent } from '@interfaces/queue'
 
 export default class DocumentsEisProvider implements DocumentsEisServiceProvider {
     private readonly notFoundRnokppRegexp: RegExp = /unauthorized: agreement rnokpp=\d{10} not found/
@@ -95,7 +96,7 @@ export default class DocumentsEisProvider implements DocumentsEisServiceProvider
         data: PassportsRequestData,
     ): RegistryPassportDTO {
         if ('code' in response && 'detail' in response) {
-            const statusCode = parseInt(response.code)
+            const statusCode = Number.parseInt(response.code)
 
             this.logger.error('Get passports result: error response', { response })
 
@@ -110,7 +111,7 @@ export default class DocumentsEisProvider implements DocumentsEisServiceProvider
         data: PassportsRequestData,
     ): RegistryPassportDTO | undefined {
         if (response.error) {
-            const statusCode = parseInt(response.error.code)
+            const statusCode = Number.parseInt(response.error.code)
 
             this.logger.error('Get passports result: error response', { response })
 
@@ -121,12 +122,7 @@ export default class DocumentsEisProvider implements DocumentsEisServiceProvider
     }
 
     private processResponseError(error: ApiError, requestData: PassportsRequestData): never {
-        let statusCode: HttpStatusCode
-        if (this.notFoundRnokppRegexp.test(error?.message)) {
-            statusCode = HttpStatusCode.NOT_FOUND
-        } else {
-            statusCode = error.getCode()
-        }
+        const statusCode = this.notFoundRnokppRegexp.test(error?.message) ? HttpStatusCode.NOT_FOUND : error.getCode()
 
         this.logger.error('Get passports result: error', {
             requestData,
@@ -139,19 +135,25 @@ export default class DocumentsEisProvider implements DocumentsEisServiceProvider
 
     private processResponseStatus(statusCode: HttpStatusCode, requestData: PassportsRequestData): never {
         switch (statusCode) {
-            case HttpStatusCode.NO_CONTENT:
+            case HttpStatusCode.NO_CONTENT: {
                 throw new DocumentNotFoundError()
-            case HttpStatusCode.UNAUTHORIZED:
+            }
+            case HttpStatusCode.UNAUTHORIZED: {
                 throw new ServiceUnavailableError()
-            case HttpStatusCode.FORBIDDEN:
+            }
+            case HttpStatusCode.FORBIDDEN: {
                 throw new AccessDeniedError()
-            case HttpStatusCode.NOT_FOUND:
+            }
+            case HttpStatusCode.NOT_FOUND: {
                 throw new DocumentNotFoundError()
-            case HttpStatusCode.INTERNAL_SERVER_ERROR:
+            }
+            case HttpStatusCode.INTERNAL_SERVER_ERROR: {
                 throw new ServiceUnavailableError()
-            default:
+            }
+            default: {
                 this.logger.error('Get passports result: error, unknown', { statusCode, requestData })
                 throw new ServiceUnavailableError()
+            }
         }
     }
 }

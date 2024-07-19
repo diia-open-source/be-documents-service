@@ -1,8 +1,8 @@
-import { ObjectId } from 'bson'
+import { mongo } from '@diia-inhouse/db'
 
 export interface Codifier {
     name: string
-    categoryId: ObjectId
+    categoryId: mongo.ObjectId
     level: string
     parentLevel?: string
     firstLevel: string

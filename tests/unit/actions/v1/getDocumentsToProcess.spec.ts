@@ -1,11 +1,13 @@
+import { randomUUID } from 'node:crypto'
+
 import TestKit, { mockInstance } from '@diia-inhouse/test'
-import { DocumentType, HttpStatusCode } from '@diia-inhouse/types'
+import { HttpStatusCode } from '@diia-inhouse/types'
 
 import GetDocumentsToProcessAction from '@actions/v1/getDocumentsToProcess'
 
 import DocumentsService from '@services/documents'
 
-import { CommonDocument, DocumentTypeResponse, Documents } from '@interfaces/services/documents'
+import { CommonDocument, Documents } from '@interfaces/services/documents'
 
 describe(`Action ${GetDocumentsToProcessAction.name}`, () => {
     const testKit = new TestKit()
@@ -16,16 +18,16 @@ describe(`Action ${GetDocumentsToProcessAction.name}`, () => {
         const { headers, session } = testKit.session.getUserActionArguments()
         const args = {
             params: {
-                filter: [<DocumentType>'document-type'],
+                filter: ['document-type'],
             },
             headers,
             session,
         }
 
-        const document = new Object()
+        const document = <CommonDocument>{ id: randomUUID() }
 
         const mockData: Documents<CommonDocument> = {
-            [<DocumentTypeResponse>'document-type-response']: {
+            ['document-type-response']: {
                 status: HttpStatusCode.OK,
                 data: [document],
             },

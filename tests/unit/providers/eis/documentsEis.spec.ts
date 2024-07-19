@@ -1,5 +1,5 @@
 import DiiaLogger from '@diia-inhouse/diia-logger'
-import { ExternalCommunicator, ExternalEvent } from '@diia-inhouse/diia-queue'
+import { ExternalCommunicator } from '@diia-inhouse/diia-queue'
 import { AccessDeniedError, DocumentNotFoundError, ExternalCommunicatorError, ServiceUnavailableError } from '@diia-inhouse/errors'
 import TestKit, { mockInstance } from '@diia-inhouse/test'
 import { HttpStatusCode } from '@diia-inhouse/types'
@@ -13,6 +13,7 @@ import Utils from '@utils/index'
 import { getPassport } from '@tests/mocks/stubs/providers/eis/passport'
 
 import { AppConfig } from '@interfaces/config'
+import { ExternalEvent } from '@interfaces/queue'
 
 describe('DocumentsEisProvider', () => {
     const testKit = new TestKit()

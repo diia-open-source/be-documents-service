@@ -109,13 +109,13 @@ export default class RegistrationAddressDataMapper {
         const communityCode = this.getCommunityCode(koatuuOrCommunityCode)
 
         const registrationParts = addressWithoutCommunity.trim().split(' ')
-        const lastPart = registrationParts[registrationParts.length - 1].trim()
+        const lastPart = (registrationParts.at(-1) || '').trim()
         let registrationAddress
         let registrationDate: string | undefined
         if (/^\d{8}$/.test(lastPart)) {
             registrationDate =
                 lastPart === this.noRegistrationDateString ? undefined : this.appUtils.convertDate(lastPart, { fromFormat: 'DDMMYYYY' })
-            registrationAddress = registrationParts.slice(0, registrationParts.length - 1).join(' ')
+            registrationAddress = registrationParts.slice(0, -1).join(' ')
         } else {
             registrationAddress = registrationParts.join(' ')
         }

@@ -4,18 +4,19 @@ import { AccessDeniedError, BadRequestError, DocumentNotFoundError, InternalServ
 import {
     AppUser,
     DocStatus,
-    DocumentInstance,
+    GenericData,
     HttpStatusCode,
     Localization,
     Logger,
     PortalUserTokenData,
+    RowType,
     SessionType,
     UserTokenData,
 } from '@diia-inhouse/types'
 import { utils } from '@diia-inhouse/utils'
 
 import TaxpayerCardService from '@src/documents/taxpayerCard/services/document'
-import { PassportRegistrationInfo } from '@src/generated'
+import { ForeignPassport, InternalPassport, PassportRegistrationInfo, PassportType } from '@src/generated'
 
 import AddressService from '@services/address'
 
@@ -24,7 +25,7 @@ import PassportDataMapper from '@dataMappers/passportDataMapper'
 import Utils from '@utils/index'
 
 import { FindForeignPassportsOps } from '@interfaces/dataMappers/passportDataMapper'
-import { PassportType, RegistryPassportDTO } from '@interfaces/dto'
+import { RegistryPassportDTO } from '@interfaces/dto'
 import { DocumentsDmsServiceProvider, DocumentsEisServiceProvider } from '@interfaces/providers'
 import { PassportByInn, PassportByInnRequester } from '@interfaces/providers/dms'
 import {
@@ -36,7 +37,7 @@ import {
     Representative,
 } from '@interfaces/providers/eis'
 import { RegistrationAddress } from '@interfaces/providers/usdr'
-import { AnalyticsActionResult as ServiceAnalyticsActionResult, AnalyticsCategory as ServiceAnalyticsCategory } from '@interfaces/services'
+import { DocumentInstance, AnalyticsActionResult as ServiceAnalyticsActionResult } from '@interfaces/services'
 import {
     DocumentWithPhoto,
     GetDocumentsContext,
@@ -44,17 +45,17 @@ import {
     GetDocumentsResult,
     IdentityDocument,
 } from '@interfaces/services/documents'
-import {
-    AssertStrategyParams,
-    DocumentVerifyParams,
-    PassportAssertParams,
-    VerifyOtpResponse,
-} from '@interfaces/services/documentVerification'
-import { RegistrationSource } from '@interfaces/services/passport'
+import { AssertStrategyParams, DocumentVerifyParams, VerifyOtpResponse } from '@interfaces/services/documentVerification'
+import { EnrichDocumentPhotoParams, PassportDocumentType, RegistrationSource } from '@interfaces/services/passport'
 import { ServiceTask } from '@interfaces/tasks'
 import { EventPayload } from '@interfaces/tasks/publishAdultRegistrationAddressCommunity'
 
 export default class PassportService {
+    private readonly documentTypeToPassportType: Record<string, PassportType> = {
+        [PassportDocumentType.ForeignPassport]: PassportType.P,
+        [PassportDocumentType.InternalPassport]: PassportType.ID,
+    }
+
     constructor(
         private readonly addressService: AddressService,
         private readonly taxpayerCardService: TaxpayerCardService,
@@ -71,14 +72,17 @@ export default class PassportService {
         private readonly logger: Logger,
     ) {}
 
-    async assertDocumentIsValid({ documentId, documentAssertParams }: AssertStrategyParams): Promise<void> | never {
-        const { user, passportType } = <PassportAssertParams>documentAssertParams
-        const documents: Passport[] = await this.getPassportsEntity(user)
-        if (!documents.length) {
-            throw new AccessDeniedError()
+    async assertDocumentIsValid({ documentId, documentType, documentAssertParams }: AssertStrategyParams): Promise<void> | never {
+        const { user } = documentAssertParams
+        const expectedType = this.documentTypeToPassportType[documentType]
+
+        const documents = await this.getPassportsEntity(user)
+
+        if (documents.length === 0 || !expectedType) {
+            throw new AccessDeniedError('Passport documents not found or received unexpected type')
         }
 
-        const isEligibleForSharing = documents.find(({ id, type }: Passport) => id === documentId && type === passportType)
+        const isEligibleForSharing = documents.some(({ id, type }) => id === documentId && type === expectedType)
         if (!isEligibleForSharing) {
             throw new DocumentNotFoundError(`There is no passport document with id ${documentId}`)
         }
@@ -125,7 +129,7 @@ export default class PassportService {
         return { documents, designSystemDocuments: [] }
     }
 
-    async getInternalPassportToProcess(user: UserTokenData): Promise<InternalPassportInstance> {
+    async getInternalPassportToProcess(user: UserTokenData): Promise<InternalPassportInstance | undefined> {
         const passports: Passport[] = await this.getPassportsEntity(user)
 
         return this.passportDataMapper.findIdCard(passports)
@@ -238,7 +242,7 @@ export default class PassportService {
 
     async getRegistrationPlaceForPassport(user: UserTokenData): Promise<string> {
         const passports: Passport[] = await this.getPassportsEntity(user)
-        const idCard: InternalPassportInstance = this.passportDataMapper.findIdCard(passports)
+        const idCard = this.passportDataMapper.findIdCard(passports)
         const foreignPassports: ForeignPassportInstance[] = this.passportDataMapper.findForeignPassports(passports, { sortByDate: true })
 
         return idCard?.currentRegistrationPlaceUA || foreignPassports[0]?.currentRegistrationPlaceUA
@@ -260,18 +264,19 @@ export default class PassportService {
     enrichDocumentWithPhoto<T extends DocumentWithPhoto>(
         document: T,
         passports: Passport[] = [],
-        category?: ServiceAnalyticsCategory,
-        action?: string,
-        analyticsData?: Record<string, unknown>,
+        params: EnrichDocumentPhotoParams = {},
     ): T {
+        const { internalPassportFirst, analytics } = params
+
         this.logger.info('Start extracting photo from passports', { docId: document.id })
 
-        const photo = this.extractPhotoFromPassports(passports)
+        const photo = this.extractPhotoFromPassports(passports, internalPassportFirst)
 
-        if (category && action && analyticsData) {
+        if (analytics) {
+            const { category, action, data } = analytics
             const actionResult = photo ? ServiceAnalyticsActionResult.Success : ServiceAnalyticsActionResult.Error
 
-            this.analytics.log(category, action, actionResult, analyticsData)
+            this.analytics.log(category, action, actionResult, data)
         }
 
         if (photo) {
@@ -284,16 +289,19 @@ export default class PassportService {
         return document
     }
 
-    extractPhotoFromPassports(passports: Passport[]): string | undefined {
-        if (!passports.length) {
+    extractPhotoFromPassports(passports: Passport[], internalPassportFirst = false): string | undefined {
+        if (passports.length === 0) {
             return
         }
 
-        const internalPassport: InternalPassportInstance = this.passportDataMapper.findIdCard(passports)
+        const internalPassport = this.passportDataMapper.findIdCard(passports)
+        if (internalPassport && internalPassportFirst) {
+            return internalPassport.photo
+        }
 
-        const [foreignPassport]: ForeignPassportInstance[] = this.passportDataMapper
+        const foreignPassport = this.passportDataMapper
             .findForeignPassports(passports, { sortByDate: true })
-            .filter((passport: ForeignPassportInstance) => passport.photo)
+            .find((passport) => passport.photo)
 
         return foreignPassport?.photo || internalPassport?.photo
     }
@@ -302,9 +310,9 @@ export default class PassportService {
         verifyOTPResponse: VerifyOtpResponse,
         params: DocumentVerifyParams = {},
     ): Promise<Passport | DocumentInstance> {
-        const { designSystem } = params
+        const { designSystem, representative } = params
 
-        const internalPassport = await this.verifyPassport(verifyOTPResponse, PassportType.ID, params?.representative)
+        const internalPassport = await this.verifyPassport(verifyOTPResponse, PassportType.ID, representative)
 
         if (designSystem) {
             const localization = verifyOTPResponse.localization || Localization.UA
@@ -319,9 +327,9 @@ export default class PassportService {
         verifyOTPResponse: VerifyOtpResponse,
         params: DocumentVerifyParams = {},
     ): Promise<Passport | DocumentInstance> {
-        const { designSystem } = params
+        const { designSystem, representative } = params
 
-        const foreignPassport = await this.verifyPassport(verifyOTPResponse, PassportType.P, params?.representative)
+        const foreignPassport = await this.verifyPassport(verifyOTPResponse, PassportType.P, representative)
 
         if (designSystem) {
             if (!verifyOTPResponse.localization) {
@@ -332,6 +340,205 @@ export default class PassportService {
         }
 
         return foreignPassport
+    }
+
+    getForeignPassportSharingRenderData(
+        document: unknown,
+        requester: string,
+        requestDateTime: string,
+        requestIdentifier: string,
+    ): GenericData {
+        const { lastNameEN, firstNameEN, lastNameUA, firstNameUA, middleNameUA, docNumber, photo, sign, eng, ua } = <ForeignPassport>(
+            document
+        )
+
+        return {
+            documentTitle: 'International Passport',
+            blocks: [
+                {
+                    logoBlock: {
+                        header: 'International Passport',
+                        title: 'Закордонний паспорт',
+                        subtitle: 'Ukraine • Україна',
+                    },
+                    marginBottom: 24,
+                },
+                { hasSeparator: true, marginBottom: 24 },
+                {
+                    identityBlock: {
+                        lastName: lastNameEN,
+                        firstName: firstNameEN,
+                        fullName: utils.getFullName(lastNameUA, firstNameUA, middleNameUA),
+                        documentNumber: docNumber,
+                        photo,
+                    },
+                    marginBottom: 16,
+                },
+                { hasSeparator: true, marginBottom: 16 },
+                {
+                    textBlock: [
+                        `The digital document copy requested on ${requestDateTime}`,
+                        `Request initiator: ${requester}`,
+                        `Request ID: ${requestIdentifier}`,
+                    ],
+                },
+                {
+                    tableBlock: [
+                        [
+                            RowType.TwoColumns,
+                            { primaryText: eng?.gender?.name, secondaryText: ua?.gender?.name },
+                            { primaryText: eng?.gender?.value, secondaryText: ua?.gender?.value },
+                        ],
+                        [
+                            RowType.TwoColumns,
+                            { primaryText: eng?.birthDate?.name, secondaryText: ua?.birthDate?.name },
+                            { primaryText: eng?.birthDate?.value },
+                        ],
+                        [
+                            RowType.TwoColumns,
+                            { primaryText: eng?.nationality?.name, secondaryText: ua?.nationality?.name },
+                            { primaryText: eng?.nationality?.value, secondaryText: ua?.nationality?.value },
+                        ],
+                        [
+                            RowType.TwoColumns,
+                            { primaryText: eng?.department?.name, secondaryText: ua?.department?.name },
+                            { primaryText: eng?.department?.value },
+                        ],
+                        [
+                            RowType.TwoColumns,
+                            { primaryText: eng?.issueDate?.name, secondaryText: ua?.issueDate?.name },
+                            { primaryText: eng?.issueDate?.value },
+                        ],
+                        [
+                            RowType.TwoColumns,
+                            { primaryText: eng?.expiryDate?.name, secondaryText: ua?.expiryDate?.name },
+                            { primaryText: eng?.expiryDate?.value },
+                        ],
+                        [
+                            RowType.TwoColumns,
+                            { primaryText: eng?.identifier?.name, secondaryText: ua?.identifier?.name },
+                            { primaryText: eng?.identifier?.value },
+                        ],
+                        [
+                            RowType.TwoColumns,
+                            { primaryText: eng?.type?.name, secondaryText: ua?.type?.name },
+                            { primaryText: eng?.type?.value },
+                        ],
+                        [
+                            RowType.TwoColumns,
+                            { primaryText: eng?.countryCode?.name, secondaryText: ua?.countryCode?.name },
+                            { primaryText: eng?.countryCode?.value },
+                        ],
+                        [
+                            RowType.TwoColumns,
+                            { primaryText: eng?.taxpayer?.name, secondaryText: ua?.taxpayer?.name },
+                            {
+                                primaryText: [eng?.taxpayer?.value || '', eng?.taxpayer?.statusDescription || ''],
+                                secondaryText: ua?.taxpayer?.statusDescription,
+                            },
+                        ],
+                        [
+                            RowType.TwoColumns,
+                            { primaryText: eng?.birthPlace?.name, secondaryText: ua?.birthPlace?.name },
+                            { primaryText: `${eng?.birthPlace?.value || ''} • ${ua?.birthPlace?.value || ''}` },
+                        ],
+                        [
+                            RowType.TwoColumns,
+                            { primaryText: eng?.residenceRegistrationPlace?.name, secondaryText: ua?.residenceRegistrationPlace?.name },
+                            { primaryText: eng?.residenceRegistrationPlace?.value },
+                        ],
+                        [RowType.TwoColumnsWithSign, { primaryText: 'Підпис:' }, { primaryText: sign }],
+                    ],
+                },
+            ],
+        }
+    }
+
+    getInternalPassportSharingRenderData(
+        document: unknown,
+        requester: string,
+        requestDateTime: string,
+        requestIdentifier: string,
+    ): GenericData {
+        const {
+            lastNameEN,
+            firstNameEN,
+            lastNameUA,
+            firstNameUA,
+            middleNameUA,
+            docNumber,
+            photo,
+            genderUA,
+            birthday,
+            nationalityUA,
+            department,
+            issueDate,
+            expirationDate,
+            taxpayerCard,
+            recordNumber,
+            birthPlaceUA,
+            currentRegistrationPlaceUA,
+            documentRegistrationPlaceUA,
+            sign,
+        } = <InternalPassport>document
+
+        return {
+            documentTitle: 'Internal Passport',
+            blocks: [
+                { logoBlock: { logoHeader: ['Паспорт громадянина', 'України'], trident: true }, marginBottom: 24 },
+                { hasSeparator: true, marginBottom: 24 },
+                {
+                    identityBlock: {
+                        lastName: lastNameUA,
+                        firstName: firstNameUA,
+                        middleName: middleNameUA,
+                        fullName: utils.getFullName(lastNameEN, firstNameEN),
+                        documentNumber: docNumber,
+                        photo,
+                    },
+                    marginBottom: 16,
+                },
+                { hasSeparator: true, marginBottom: 16 },
+                {
+                    textBlock: [
+                        `Запит на цифрові копії документів від ${requestDateTime}`,
+                        `Ініціатор запиту: ${requester}`,
+                        `Ідентифікатор запиту: ${requestIdentifier}`,
+                    ],
+                    marginBottom: 32,
+                },
+                {
+                    tableBlock: [
+                        [RowType.TwoColumns, { primaryText: 'Стать:' }, { primaryText: genderUA }],
+                        [RowType.TwoColumns, { primaryText: 'Дата народження:' }, { primaryText: birthday }],
+                        [RowType.TwoColumns, { primaryText: 'Громадянство:' }, { primaryText: nationalityUA }],
+                        [RowType.TwoColumns, { primaryText: 'Орган, що видав:' }, { primaryText: department }],
+                        [RowType.TwoColumns, { primaryText: 'Дата видачі:' }, { primaryText: issueDate }],
+                        [RowType.TwoColumns, { primaryText: 'Дійсний до:' }, { primaryText: expirationDate }],
+                        [
+                            RowType.TwoColumns,
+                            { primaryText: 'РНОКПП:' },
+                            {
+                                primaryText: [
+                                    taxpayerCard?.number || '',
+                                    `(Верифіковано у реєстрі Державної податкової служби за запитом від ${
+                                        taxpayerCard?.creationDate || ''
+                                    })`,
+                                ],
+                            },
+                        ],
+                        [RowType.TwoColumns, { primaryText: 'Запис № (УНЗР):' }, { primaryText: recordNumber }],
+                        [RowType.TwoColumns, { primaryText: 'Місце народження:' }, { primaryText: birthPlaceUA }],
+                        [
+                            RowType.TwoColumns,
+                            { primaryText: 'Місце реєстрації проживання:' },
+                            { primaryText: currentRegistrationPlaceUA || documentRegistrationPlaceUA },
+                        ],
+                        [RowType.TwoColumnsWithSign, { primaryText: 'Підпис:' }, { primaryText: sign }],
+                    ],
+                },
+            ],
+        }
     }
 
     private async getPassportsByContext(
@@ -375,18 +582,17 @@ export default class PassportService {
         } catch (err) {
             return await utils.handleError(err, async (apiErr) => {
                 if (apiErr.getCode() === HttpStatusCode.NOT_FOUND) {
-                    await Promise.all([
-                        this.task.publish(ServiceTask.PublishAdultRegistrationAddressCommunity, <EventPayload>{
-                            userIdentifier,
-                            itn,
-                            lName,
-                            fName,
-                            mName,
-                            birthDay,
-                            gender,
-                        }),
-                    ])
+                    this.task.publish(ServiceTask.PublishAdultRegistrationAddressCommunity, <EventPayload>{
+                        userIdentifier,
+                        itn,
+                        lName,
+                        fName,
+                        mName,
+                        birthDay,
+                        gender,
+                    })
 
+                    // eslint-disable-next-line unicorn/no-useless-undefined
                     return undefined
                 }
 
@@ -469,7 +675,7 @@ export default class PassportService {
         const passports: Passport[] = await promisedPassports
 
         const documents: ForeignPassportInstance[] = this.passportDataMapper.findForeignPassports(passports, ops)
-        if (!documents.length) {
+        if (documents.length === 0) {
             throw new DocumentNotFoundError()
         }
 
@@ -479,7 +685,7 @@ export default class PassportService {
     private async getInternalPassportFromPromise(promisedPassports: Promise<Passport[]>): Promise<InternalPassportInstance[]> {
         const passports: Passport[] = await promisedPassports
 
-        const internalPassport: InternalPassportInstance = this.passportDataMapper.findIdCard(passports)
+        const internalPassport = this.passportDataMapper.findIdCard(passports)
         if (!internalPassport) {
             throw new DocumentNotFoundError()
         }
@@ -497,10 +703,10 @@ export default class PassportService {
 
         switch (type) {
             case PassportType.ID: {
-                const idCard: InternalPassportInstance = this.passportDataMapper.findIdCard(passports)
+                const idCard = this.passportDataMapper.findIdCard(passports)
                 // SPIKE: because of registry change date_issue (add delimiter '-')
-                const idCardDocumentId: string = idCard?.id.replace('-', '')
-                const requestDocumentId: string = docId.replace('-', '')
+                const idCardDocumentId = idCard?.id.replace('-', '')
+                const requestDocumentId = docId.replace('-', '')
 
                 return idCardDocumentId === requestDocumentId ? idCard : undefined
             }

@@ -1,6 +1,7 @@
-import { Model, Schema, model, models } from 'mongoose'
+import { Model, Schema, model, models } from '@diia-inhouse/db'
+import { DocStatus, Localization, OwnerType } from '@diia-inhouse/types'
 
-import { DocStatus, DocumentType, Localization, OwnerType } from '@diia-inhouse/types'
+import { documentTypes } from '@src/documents/deps'
 
 import { DocumentVerificationOtp } from '@interfaces/models/documentVerificationOtp'
 
@@ -10,7 +11,7 @@ export const documentVerificationOtpSchema = new Schema<DocumentVerificationOtp>
         documentId: { type: String, required: true },
         requestorJWE: { type: String, required: true },
         consumerJWE: { type: String },
-        registryDocumentType: { type: String, enum: Object.values(DocumentType), required: true },
+        registryDocumentType: { type: String, enum: documentTypes, required: true },
         hash: { type: String, unique: true, required: true },
         expirationDate: { type: Date, required: true },
         ownerType: { type: String, enum: Object.values(OwnerType), required: true },

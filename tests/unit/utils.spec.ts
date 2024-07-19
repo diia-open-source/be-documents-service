@@ -4,11 +4,12 @@ import { IdentifierService } from '@diia-inhouse/crypto'
 import DiiaLogger from '@diia-inhouse/diia-logger'
 import { BadRequestError, InternalServerError } from '@diia-inhouse/errors'
 import TestKit, { mockInstance } from '@diia-inhouse/test'
-import { AuthDocumentType, DocumentType } from '@diia-inhouse/types'
+import { AuthDocumentType } from '@diia-inhouse/types'
 
 import Utils from '@src/utils'
 
 import { AppConfig } from '@interfaces/config'
+import { PassportDocumentType } from '@interfaces/services/passport'
 
 type FullName = {
     lastName: string
@@ -233,7 +234,7 @@ describe('Utils', () => {
         const cyrillicAlphabet = 'абвгдеёжзийклмнопрстуфхцчшщъыьэюя'
         const ukrainianAlphabet = 'абвгґдеєжзиіїйклмнопрстуфхцчшщьюя'
         const ukrainianCharsFromCyrillic = 'абвгдежзийклмнопрстуфхцчшщьюя'
-        const symbols = ' \'"’()[]{}<>:,―!.«»-‐?‘’;/⁄&@*\\/•^¡¿¬#№%¶′§~'
+        const symbols = String.raw` '"’()[]{}<>:,―!.«»-‐?‘’;/⁄&@*\/•^¡¿¬#№%¶′§~`
 
         it.each([
             [
@@ -284,9 +285,9 @@ describe('Utils', () => {
     describe('getStorageDataByDocumentTypes', () => {
         it.each([
             ['empty array if document type was not passed', undefined, {}, []],
-            ['empty array if storage data was not passed', DocumentType.InternalPassport, undefined, []],
+            ['empty array if storage data was not passed', PassportDocumentType.InternalPassport, undefined, []],
             ['empty array if document type and storage data were not passed', undefined, undefined, []],
-            ['empty array if data was not found by document type', DocumentType.InternalPassport, {}, []],
+            ['empty array if data was not found by document type', PassportDocumentType.InternalPassport, {}, []],
         ])('should return %s', (_msg, documentType, storageData, expected) => {
             const result = appUtils.getStorageDataByDocumentTypes(documentType, storageData)
 

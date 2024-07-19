@@ -2,6 +2,7 @@ import { NotFoundError, UnprocessableEntityError } from '@diia-inhouse/errors'
 import TestKit, { mockInstance } from '@diia-inhouse/test'
 
 import GetDriverLicenseToProcessAction from '@src/documents/driverLicense/actions/v2/getDriverLicenseToProcess'
+import { DocumentType, DriverLicense } from '@src/documents/driverLicense/interfaces/services'
 import DriverLicenseService from '@src/documents/driverLicense/services/document'
 
 describe('ExpireDocumentAction', () => {
@@ -14,8 +15,8 @@ describe('ExpireDocumentAction', () => {
 
     it('should throw UnprocessableEntityError when trafficService return more then one driverLicenses', async () => {
         jest.spyOn(driverLicenseService, 'getDriverLicenses').mockResolvedValueOnce([
-            testKit.docs.getDriverLicense(),
-            testKit.docs.getDriverLicense(),
+            <DriverLicense>testKit.docs.generateDocument(DocumentType.DriverLicense),
+            <DriverLicense>testKit.docs.generateDocument(DocumentType.DriverLicense),
         ])
 
         await expect(
@@ -44,7 +45,7 @@ describe('ExpireDocumentAction', () => {
     })
 
     it('should return driverLicense from trafficService', async () => {
-        const driverLicense = testKit.docs.getDriverLicense()
+        const driverLicense = <DriverLicense>testKit.docs.generateDocument(DocumentType.DriverLicense)
         const getDriverLicensesSpy = jest.spyOn(driverLicenseService, 'getDriverLicenses').mockResolvedValueOnce([driverLicense])
         const customActionArguments = {
             params: {

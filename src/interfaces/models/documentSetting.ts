@@ -1,6 +1,4 @@
-import { Document } from 'mongoose'
-
-import { DocumentType } from '@diia-inhouse/types'
+import { Document } from '@diia-inhouse/db'
 
 export enum ExpirationType {
     Success = 'success',
@@ -18,9 +16,10 @@ export type ExpirationTime = {
 }
 
 export interface DocumentSetting {
-    type: DocumentType
+    type: string
     version: DocumentSettingVersion
     expirationTime: ExpirationTime
+    defaultHidden?: boolean
 }
 
 export interface DocumentSettingModel extends DocumentSetting, Document {}

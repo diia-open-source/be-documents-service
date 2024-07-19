@@ -1,6 +1,6 @@
-import { Model, Schema, SchemaDefinition, model, models } from 'mongoose'
+import { Model, Schema, SchemaDefinition, model, models } from '@diia-inhouse/db'
 
-import { DocumentType } from '@diia-inhouse/types'
+import { documentTypes } from '@src/documents/deps'
 
 import { DocumentIdsExpiration, DocumentsExpiration } from '@interfaces/models/documentsExpiration'
 
@@ -13,20 +13,18 @@ const documentIdsExpirationSchema = new Schema<DocumentIdsExpiration>(
     { _id: false },
 )
 
-export const documentsExpirationSchema = new Schema<DocumentsExpiration>(
-    Object.values(DocumentType).reduce<SchemaDefinition<DocumentsExpiration>>(
-        (acc, type) => {
-            acc[type] = { type: documentIdsExpirationSchema }
+export const documentsExpirationSchema = ((): Schema<DocumentsExpiration> => {
+    const schemaDefinition: SchemaDefinition<DocumentsExpiration> = {
+        mobileUid: { type: String, required: true },
+        userIdentifier: { type: String, index: true, required: true },
+    }
 
-            return acc
-        },
-        {
-            mobileUid: { type: String, required: true },
-            userIdentifier: { type: String, index: true, required: true },
-        },
-    ),
-    { timestamps: true },
-)
+    for (const type of documentTypes) {
+        schemaDefinition[type] = { type: documentIdsExpirationSchema }
+    }
+
+    return new Schema<DocumentsExpiration>(schemaDefinition, { timestamps: true })
+})()
 
 documentsExpirationSchema.index(
     { mobileUid: 1, userIdentifier: 1 },

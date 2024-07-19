@@ -1,14 +1,23 @@
 import { GrpcAppAction } from '@diia-inhouse/diia-app'
 
-import { ActionVersion, DocumentType, SessionType } from '@diia-inhouse/types'
+import { ActionVersion, SessionType } from '@diia-inhouse/types'
 import { ValidationSchema } from '@diia-inhouse/validators'
 
+import DocumentsService from '@services/documents'
 import DocumentsExpirationService from '@services/documentsExpiration'
 
 import { ActionResult, CustomActionArguments } from '@interfaces/actions/v2/expireDocument'
 
 export default class ExpireDocumentAction implements GrpcAppAction {
-    constructor(private readonly documentsExpirationService: DocumentsExpirationService) {}
+    constructor(
+        private readonly documentsService: DocumentsService,
+        private readonly documentsExpirationService: DocumentsExpirationService,
+    ) {
+        this.validationRules = {
+            documentType: { type: 'string', enum: this.documentsService.documentTypes },
+            userIdentifier: { type: 'string' },
+        }
+    }
 
     readonly sessionType: SessionType = SessionType.None
 
@@ -16,16 +25,13 @@ export default class ExpireDocumentAction implements GrpcAppAction {
 
     readonly name: string = 'expireDocument'
 
-    readonly validationRules: ValidationSchema = {
-        documentType: { type: 'string', enum: Object.values(DocumentType) },
-        userIdentifier: { type: 'string' },
-    }
+    readonly validationRules: ValidationSchema
 
     async handler(args: CustomActionArguments): Promise<ActionResult> {
         const {
             params: { documentType, userIdentifier },
         } = args
 
-        await this.documentsExpirationService.expireDocumentByType(<DocumentType>documentType, userIdentifier)
+        await this.documentsExpirationService.expireDocumentByType(documentType, userIdentifier)
     }
 }

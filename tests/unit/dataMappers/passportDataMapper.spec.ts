@@ -2,19 +2,16 @@ import { DocumentNotFoundError } from '@diia-inhouse/errors'
 import { mockInstance } from '@diia-inhouse/test'
 import {
     ActionCode,
-    DocumentInstance,
-    DocumentTypeCamelCase,
     Icon,
     IconAtmActionType,
-    PassportGenderEN,
-    PassportGenderUA,
-    PassportType,
     TableBlockOrg,
     TableItemMlc,
     TickerAtm,
     TickerAtmType,
     TickerAtmUsage,
 } from '@diia-inhouse/types'
+
+import { PassportType } from '@src/generated'
 
 import DocumentAttributesService from '@services/documentAttributes'
 
@@ -27,8 +24,10 @@ import Utils from '@utils/index'
 import { getPassport } from '@tests/mocks/stubs/providers/eis/passport'
 
 import { AppConfig } from '@interfaces/config'
-import { RegistryPassportDTO } from '@interfaces/dto'
+import { PassportGenderEN, PassportGenderUA, RegistryPassportDTO } from '@interfaces/dto'
+import { DocumentInstance } from '@interfaces/services'
 import { DefaultValue, DocumentMediaAlias } from '@interfaces/services/documents'
+import { PassportDocumentTypeCamelCase } from '@interfaces/services/passport'
 
 describe('PassportDataMapper', () => {
     const designSystemDataMapperMock = mockInstance(DesignSystemDataMapper)
@@ -355,6 +354,7 @@ describe('PassportDataMapper', () => {
                                         type: 'positive',
                                         usage: 'document',
                                         value: 'value',
+                                        componentId: 'ticker_ua',
                                     },
                                 },
                                 {
@@ -365,10 +365,10 @@ describe('PassportDataMapper', () => {
                                         },
                                         iconAtm: {
                                             code: Icon.ellipseKebab,
-                                            accessibilityDescription: DocumentTypeCamelCase.idCard,
+                                            accessibilityDescription: PassportDocumentTypeCamelCase.IdCard,
                                             action: {
                                                 type: IconAtmActionType.ellipseMenu,
-                                                subtype: DocumentTypeCamelCase.idCard,
+                                                subtype: PassportDocumentTypeCamelCase.IdCard,
                                             },
                                         },
                                     },
@@ -399,6 +399,7 @@ describe('PassportDataMapper', () => {
                                     type: 'positive',
                                     usage: 'document',
                                     value: 'value',
+                                    componentId: 'ticker_ua',
                                 },
                             },
                             {
@@ -512,6 +513,9 @@ describe('PassportDataMapper', () => {
                                     ],
                                 },
                             },
+                            {
+                                verificationCodesOrg: {},
+                            },
                         ],
                     },
                 ],
@@ -590,6 +594,7 @@ describe('PassportDataMapper', () => {
                                         type: 'positive',
                                         usage: 'document',
                                         value: 'value',
+                                        componentId: 'ticker_ua',
                                     },
                                 },
                                 {
@@ -600,10 +605,10 @@ describe('PassportDataMapper', () => {
                                         },
                                         iconAtm: {
                                             code: Icon.ellipseKebab,
-                                            accessibilityDescription: DocumentTypeCamelCase.foreignPassport,
+                                            accessibilityDescription: PassportDocumentTypeCamelCase.ForeignPassport,
                                             action: {
                                                 type: IconAtmActionType.ellipseMenu,
-                                                subtype: DocumentTypeCamelCase.foreignPassport,
+                                                subtype: PassportDocumentTypeCamelCase.ForeignPassport,
                                             },
                                         },
                                     },
@@ -653,6 +658,7 @@ describe('PassportDataMapper', () => {
                                         type: 'positive',
                                         usage: 'document',
                                         value: 'value',
+                                        componentId: 'ticker_ua',
                                     },
                                 },
                                 {
@@ -663,10 +669,10 @@ describe('PassportDataMapper', () => {
                                         },
                                         iconAtm: {
                                             code: Icon.ellipseKebab,
-                                            accessibilityDescription: DocumentTypeCamelCase.foreignPassport,
+                                            accessibilityDescription: PassportDocumentTypeCamelCase.ForeignPassport,
                                             action: {
                                                 type: IconAtmActionType.ellipseMenu,
-                                                subtype: DocumentTypeCamelCase.foreignPassport,
+                                                subtype: PassportDocumentTypeCamelCase.ForeignPassport,
                                             },
                                         },
                                     },
@@ -696,6 +702,7 @@ describe('PassportDataMapper', () => {
                                     type: 'positive',
                                     usage: 'document',
                                     value: 'value',
+                                    componentId: 'ticker_ua',
                                 },
                             },
                             {
@@ -829,6 +836,9 @@ describe('PassportDataMapper', () => {
                                     ],
                                 },
                             },
+                            {
+                                verificationCodesOrg: {},
+                            },
                         ],
                     },
                 ],
@@ -839,14 +849,16 @@ describe('PassportDataMapper', () => {
                 type: TickerAtmType.positive,
                 usage: TickerAtmUsage.document,
                 value: 'value',
+                componentId: 'ticker_ua',
             })
             jest.spyOn(documentAttributesServiceMock, 'getTicker').mockReturnValue({
                 type: TickerAtmType.positive,
                 usage: TickerAtmUsage.document,
                 value: 'value',
+                componentId: 'ticker_ua',
             })
-            jest.spyOn(designSystemDataMapperMock, 'getFrontCardWithPhotoDefault').mockImplementation(
-                (docName: string, docType: DocumentTypeCamelCase, fullName: string, ticker: TickerAtm, items: TableItemMlc[]) => [
+            jest.spyOn(designSystemDataMapperMock, 'getFrontCard').mockImplementation(
+                (docName: string, docType: string, fullName: string, ticker: TickerAtm, items: TableItemMlc[]) => [
                     {
                         docHeadingOrg: {
                             headingWithSubtitlesMlc: {
@@ -1135,10 +1147,11 @@ describe('PassportDataMapper', () => {
                 },
                 (passport: RegistryPassportDTO): void => {
                     expect(registrationAddressDataMapperMock.toEntity).toHaveBeenCalledWith(passport.registration)
-                    passport.documents.forEach(({ date_expiry, date_issue }) => {
+                    // eslint-disable-next-line @typescript-eslint/naming-convention
+                    for (const { date_expiry, date_issue } of passport.documents) {
                         expect(utilsMock.isValidDate).toHaveBeenCalledWith(date_expiry)
                         expect(utilsMock.isValidDate).toHaveBeenCalledWith(date_issue)
-                    })
+                    }
                 },
             ],
             [
@@ -1350,10 +1363,11 @@ describe('PassportDataMapper', () => {
                             registrationDate: '05.07.2007',
                         },
                     })
-                    passport.documents.forEach(({ date_expiry, date_issue }) => {
+                    // eslint-disable-next-line @typescript-eslint/naming-convention
+                    for (const { date_expiry, date_issue } of passport.documents) {
                         expect(utilsMock.isValidDate).toHaveBeenCalledWith(date_expiry)
                         expect(utilsMock.isValidDate).toHaveBeenCalledWith(date_issue)
-                    })
+                    }
                 },
             ],
             [
@@ -1377,10 +1391,11 @@ describe('PassportDataMapper', () => {
                 },
                 (passport: RegistryPassportDTO): void => {
                     expect(registrationAddressDataMapperMock.toEntity).toHaveBeenCalledWith(passport.registration)
-                    passport.documents.forEach(({ date_expiry, date_issue }) => {
+                    // eslint-disable-next-line @typescript-eslint/naming-convention
+                    for (const { date_expiry, date_issue } of passport.documents) {
                         expect(utilsMock.isValidDate).toHaveBeenCalledWith(date_expiry)
                         expect(utilsMock.isValidDate).toHaveBeenCalledWith(date_issue)
-                    })
+                    }
                 },
             ],
         ])('should %s', (_msg, inputPassport, passportFilter, expectedResult, defineSpies, checkExpectations) => {

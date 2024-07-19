@@ -1,11 +1,9 @@
-import { DocStatus, Localization, TaxpayerCardInDocument, TickerAtm } from '@diia-inhouse/types'
+import { DocStatus, Localization, TickerAtm } from '@diia-inhouse/types'
 
-import { PassportRegistrationInfo } from '@src/generated'
+import { ForeignPassportInstanceDetails, PassportRegistrationInfo, PassportType } from '@src/generated'
 
-import { PassportGenderEN, PassportGenderUA, PassportType } from '@interfaces/dto'
+import { PassportGenderEN, PassportGenderUA } from '@interfaces/dto'
 import { RegistrationAddress } from '@interfaces/providers/usdr'
-import { NameValue } from '@interfaces/services'
-import { DocumentTicker } from '@interfaces/services/documentAttributes'
 import { DocumentMetaData } from '@interfaces/services/documentsMetaData'
 
 export enum NationalityUA {
@@ -43,7 +41,6 @@ export interface TaxpayerCard {
 
 export interface BasePassportInstance extends DocumentMetaData {
     id: string
-    docNumber: string
     series?: string
     number: string
     genderUA: PassportGenderUA | string
@@ -85,38 +82,6 @@ export interface ForeignPassportInstance extends BasePassportInstance {
 }
 
 export type Passport = InternalPassportInstance | ForeignPassportInstance
-
-export interface ForeignPassportInstanceDetails {
-    card: {
-        name: string
-        icon: string
-        lastName: string
-        firstName: string
-        middleName?: string
-        birthDate: NameValue
-        docNumber: NameValue
-    }
-    name: string
-    icon: string
-    country: string
-    docNumber: NameValue
-    lastName: string
-    firstName: string
-    gender: NameValue
-    birthDate: NameValue
-    nationality: NameValue
-    department: NameValue
-    issueDate: NameValue
-    expiryDate: NameValue
-    identifier: NameValue
-    type: NameValue
-    countryCode: NameValue
-    taxpayer?: TaxpayerCardInDocument
-    birthPlace: NameValue
-    residenceRegistrationPlace: NameValue
-    registrationDate: NameValue
-    tickerOptions?: DocumentTicker
-}
 
 export interface PassportFull {
     data: PassportFullInstance[]

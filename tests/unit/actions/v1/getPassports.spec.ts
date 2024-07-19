@@ -6,6 +6,7 @@ import DocumentsExpirationService from '@services/documentsExpiration'
 import PassportService from '@services/passport'
 
 import { PassportFullInstance } from '@interfaces/providers/eis'
+import { PassportDocumentType } from '@interfaces/services/passport'
 
 describe(`Action ${GetPassports.name}`, () => {
     const testKit = new TestKit()
@@ -20,7 +21,7 @@ describe(`Action ${GetPassports.name}`, () => {
             session,
         }
 
-        const data = [<PassportFullInstance>(<unknown>testKit.docs.getForeignPassport())]
+        const data = [<PassportFullInstance>testKit.docs.generateDocument(PassportDocumentType.ForeignPassport)]
 
         const currentDate: string = new Date().toISOString()
         const expirationDate: string = new Date(Date.now() * 1000).toISOString()

@@ -1,14 +1,13 @@
-import { ObjectId } from 'bson'
-
-import { DocumentType, ServiceActionArguments } from '@diia-inhouse/types'
+import { mongo } from '@diia-inhouse/db'
+import { ServiceActionArguments } from '@diia-inhouse/types'
 
 import { Document } from '@interfaces/services/documents'
 
 export interface CustomActionArguments extends ServiceActionArguments {
     params: {
-        documentType: DocumentType
+        documentType: string
         barcode: string
-        branchId: ObjectId
+        branchId: mongo.ObjectId
     }
 }
 

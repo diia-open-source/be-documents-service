@@ -1,13 +1,15 @@
-import { randomUUID } from 'crypto'
+import { randomUUID } from 'node:crypto'
 
-import { ObjectId } from 'bson'
-
+import { mongo } from '@diia-inhouse/db'
 import TestKit, { mockInstance } from '@diia-inhouse/test'
-import { DocumentType, Localization } from '@diia-inhouse/types'
+import { Localization } from '@diia-inhouse/types'
 
 import ShareDriverLicenseAction from '@src/documents/driverLicense/actions/v1/shareDriverLicense'
+import { DocumentType } from '@src/documents/driverLicense/interfaces/services'
 
 import DocumentVerificationService from '@services/documentVerification'
+
+import { ShareLinkResponse } from '@interfaces/services/documentVerification'
 
 describe(`Action ${ShareDriverLicenseAction.name}`, () => {
     const testKit = new TestKit()
@@ -25,12 +27,12 @@ describe(`Action ${ShareDriverLicenseAction.name}`, () => {
             headers,
         }
 
-        const link = {
-            id: new ObjectId(),
+        const link = <ShareLinkResponse>(<unknown>{
+            id: new mongo.ObjectId(),
             link: 'link',
             timerText: 'timerText',
             timerTime: 100,
-        }
+        })
 
         jest.spyOn(documentVerificationService, 'generateOtpLink').mockResolvedValueOnce(link)
 
@@ -39,9 +41,7 @@ describe(`Action ${ShareDriverLicenseAction.name}`, () => {
             documentType: DocumentType.DriverLicense,
             documentId: args.params.documentId,
             headers: args.headers,
-            userIdentifier: args.session.user.identifier,
-            documentAssertParams: { itn: args.session.user.itn },
-            generateBarcode: true,
+            user: args.session.user,
             localization: args.params.localization,
         })
     })

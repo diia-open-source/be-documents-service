@@ -1,51 +1,49 @@
-import { randomUUID } from 'crypto'
+import { randomUUID } from 'node:crypto'
 
 import { IdentifierService } from '@diia-inhouse/crypto'
 import Logger from '@diia-inhouse/diia-logger'
 import { Task } from '@diia-inhouse/diia-queue'
 import { EnvService } from '@diia-inhouse/env'
-import { AccessDeniedError, BadRequestError } from '@diia-inhouse/errors'
+import { AccessDeniedError, BadRequestError, InternalServerError } from '@diia-inhouse/errors'
 import TestKit, { mockInstance } from '@diia-inhouse/test'
-import {
-    AppUser,
-    DocStatus,
-    DocumentType,
-    HttpStatusCode,
-    InternalPassport,
-    OwnerType,
-    ProfileFeature,
-    SessionType,
-    UserSession,
-} from '@diia-inhouse/types'
+import { AppUser, HttpStatusCode, OwnerType, ProfileFeature, SessionType, UserSession } from '@diia-inhouse/types'
+import { DocumentOrderSettingsItem } from '@diia-inhouse/user-service-client'
 
 import TaxpayerCardService from '@src/documents/taxpayerCard/services/document'
 
 import AnalyticsService from '@services/analytics'
 import DocumentsService from '@services/documents'
+import DocumentSettingsService from '@services/documentSettings'
 import DocumentsExpirationService from '@services/documentsExpiration'
 import DocumentStorageService from '@services/documentStorage'
 import PassportService from '@services/passport'
 import UserService from '@services/user'
+import UserDocumentSettingsService from '@services/userDocumentSettings'
 
 import DocumentsDataMapper from '@dataMappers/documentsDataMapper'
 
 import Utils from '@utils/index'
 
-import PluginDepsCollectionMock, { getDocumentService } from '@mocks/stubs/documentDepsCollection'
+import { getDocumentService } from '@mocks/stubs/documentDepsCollection'
+
+import { userServiceClient } from '@tests/mocks/grpc/clients'
 
 import { DocumentsExpirationModel } from '@interfaces/models/documentsExpiration'
-import { DocumentTypeResponse, DocumentsFeaturePointsExistence, GetDocumentsResult } from '@interfaces/services/documents'
+import { InternalPassportInstance } from '@interfaces/providers/eis'
+import { DocumentsFeaturePointsExistence } from '@interfaces/services/documents'
+import { PassportDocumentType, PassportDocumentTypeCamelCase } from '@interfaces/services/passport'
 import { UserProfileAddDocumentsMessage, UserProfileDocument } from '@interfaces/services/user'
 
 describe(`Service DocumentsService`, () => {
     const testKit = new TestKit()
     const analyticsService = mockInstance(AnalyticsService)
-    const pluginCollection = new PluginDepsCollectionMock([getDocumentService()])
     const documentsExpirationService = mockInstance(DocumentsExpirationService)
     const documentStorageService = mockInstance(DocumentStorageService)
+    const documentSettingsService = mockInstance(DocumentSettingsService)
     const passportService = mockInstance(PassportService)
     const taxpayerCardService = mockInstance(TaxpayerCardService)
     const userService = mockInstance(UserService)
+    const userDocumentSettingsService = mockInstance(UserDocumentSettingsService)
 
     const documentsDataMapper = mockInstance(DocumentsDataMapper)
 
@@ -58,12 +56,15 @@ describe(`Service DocumentsService`, () => {
 
     const service = new DocumentsService(
         analyticsService,
-        pluginCollection,
+        [getDocumentService()],
         documentsExpirationService,
         documentStorageService,
+        documentSettingsService,
         passportService,
         taxpayerCardService,
         userService,
+        userServiceClient,
+        userDocumentSettingsService,
         documentsDataMapper,
         appUtils,
         identifier,
@@ -73,6 +74,8 @@ describe(`Service DocumentsService`, () => {
     )
     const headers = testKit.session.getHeaders()
     const session = testKit.session.getUserSession()
+
+    service.onRegistrationsFinished()
 
     describe(`method: getDocumentsFilterForSession`, () => {
         it('should throw BadRequestError if given unsupported session type', () => {
@@ -91,7 +94,7 @@ describe(`Service DocumentsService`, () => {
                 },
             }
 
-            const filter = [...service.documentFilters, <DocumentType>'document-type-8', <DocumentType>'document-type-9']
+            const filter = [...service.documentFilters, 'document-type-8', 'document-type-9']
 
             expect(service.getDocumentsFilterForSession(extendedSession)).toMatchObject(filter)
         })
@@ -116,7 +119,7 @@ describe(`Service DocumentsService`, () => {
 
     describe(`method: getDocumentsToProcess`, () => {
         it('should return empty data array if received unexpected document type', async () => {
-            const wrongDocumentType = <DocumentType>'wrong-type'
+            const wrongDocumentType = 'wrong-type'
 
             const result = { [wrongDocumentType]: { data: [], status: HttpStatusCode.BAD_REQUEST, unavailableData: undefined } }
 
@@ -126,7 +129,7 @@ describe(`Service DocumentsService`, () => {
 
     describe(`method: getDocumentsToProcessByItn`, () => {
         it('should return empty data array if received unexpected document type', async () => {
-            const wrongDocumentType = <DocumentType>'wrong-type'
+            const wrongDocumentType = 'wrong-type'
 
             const result = { [wrongDocumentType]: { data: [], status: 400, unavailableData: undefined } }
 
@@ -134,42 +137,18 @@ describe(`Service DocumentsService`, () => {
         })
     })
 
-    describe(`method: getDocumentsToProcessV1`, () => {
-        it('should return internal passport', async () => {
-            const mockDocumentsFilter: DocumentType[] = [DocumentType.InternalPassport]
-            const documentTypeResponse = DocumentTypeResponse.IdCard
-
-            const getInternalPassportResponse: GetDocumentsResult<InternalPassport> = {
-                documents: [testKit.docs.getInternalPassport()],
-                designSystemDocuments: [],
-                unavailableDocuments: [],
-                statusCode: HttpStatusCode.OK,
-            }
-
-            jest.spyOn(passportService, 'getInternalPassportDocuments').mockResolvedValueOnce(getInternalPassportResponse)
-
-            const result = {
-                [documentTypeResponse]: {
-                    status: getInternalPassportResponse.statusCode,
-                    data: getInternalPassportResponse.documents,
-                },
-            }
-
-            const card = testKit.docs.getTaxpayerCard()
-
-            jest.spyOn(taxpayerCardService, 'getTaxpayerCard').mockResolvedValueOnce(card)
-
-            expect(await service.getDocumentsToProcessV1(mockDocumentsFilter, session.user)).toMatchObject(result)
-        })
-    })
-
     describe(`method: getFilteredDocumentsOrder`, () => {
         it('should return documents order', async () => {
-            const documentsOrder = [{ documentType: DocumentType.InternalPassport }]
+            const documentsOrder: DocumentOrderSettingsItem[] = [
+                { documentType: PassportDocumentType.InternalPassport, documentIdentifiers: [] },
+            ]
 
-            const result = [DocumentTypeResponse.IdCard]
+            const result = [PassportDocumentTypeCamelCase.IdCard]
 
-            jest.spyOn(userService, 'getDocumentsOrder').mockResolvedValueOnce(documentsOrder)
+            jest.spyOn(userServiceClient, 'getUserDocumentSettings').mockResolvedValueOnce({
+                documentOrderSettings: documentsOrder,
+                documentVisibilitySettings: [],
+            })
 
             expect(await service.getFilteredDocumentsOrder(session.user.identifier)).toMatchObject(result)
         })
@@ -177,10 +156,11 @@ describe(`Service DocumentsService`, () => {
 
     describe(`method: getIdentityDocument`, () => {
         it('should return undefined if not found passport', async () => {
+            const undefinedIdentityDocument = undefined
             const documents = { hasDocuments: true, missingDocumnets: [] }
 
             jest.spyOn(userService, 'hasDocuments').mockResolvedValueOnce(documents)
-            jest.spyOn(passportService, 'getIdentityDocument').mockResolvedValueOnce(undefined)
+            jest.spyOn(passportService, 'getIdentityDocument').mockResolvedValueOnce(undefinedIdentityDocument)
 
             expect(await service.getIdentityDocument(session.user)).toBeUndefined()
         })
@@ -190,8 +170,8 @@ describe(`Service DocumentsService`, () => {
 
             jest.spyOn(userService, 'hasDocuments').mockResolvedValueOnce(documents)
 
-            const passport = testKit.docs.getInternalPassport()
-            const result = { ...passport, identityType: DocumentType.InternalPassport }
+            const passport = <InternalPassportInstance>testKit.docs.generateDocument(PassportDocumentType.InternalPassport)
+            const result = { ...passport, identityType: PassportDocumentType.InternalPassport }
 
             jest.spyOn(passportService, 'getIdentityDocument').mockResolvedValueOnce(result)
 
@@ -201,26 +181,26 @@ describe(`Service DocumentsService`, () => {
 
     describe(`method: handleDocumentsPhoto`, () => {
         it('should return undefined if checked points are empty', async () => {
-            expect(
-                await service.handleDocumentsPhoto(session.user.identifier, <DocumentType>'document-type', [], undefined),
-            ).toBeUndefined()
+            const undefinedCheckPoints = undefined
+
+            expect(await service.handleDocumentsPhoto(session.user.identifier, 'document-type', [], undefinedCheckPoints)).toBeUndefined()
         })
 
         it('should successfully handle documents photo', async () => {
             const mockCheckedPoints: DocumentsFeaturePointsExistence = {
-                [DocumentType.InternalPassport]: new Set(['point1', 'point2']),
+                [PassportDocumentType.InternalPassport]: new Set(['point1', 'point2']),
             }
 
-            const passport = testKit.docs.getInternalPassport()
+            const passport = <InternalPassportInstance>testKit.docs.generateDocument(PassportDocumentType.InternalPassport)
 
             jest.spyOn(appUtils, 'getDocumentPhoto').mockReturnValueOnce(passport.photo)
             jest.spyOn(identifier, 'createIdentifier').mockReturnValueOnce('identifier')
-            jest.spyOn(userService, 'saveDocumentPhoto').mockResolvedValueOnce(undefined)
-            jest.spyOn(userService, 'removeDocumentPhoto').mockResolvedValueOnce(undefined)
+            jest.spyOn(userService, 'saveDocumentPhoto').mockResolvedValueOnce()
+            jest.spyOn(userService, 'removeDocumentPhoto').mockResolvedValueOnce()
 
             const result = await service.handleDocumentsPhoto(
                 session.user.identifier,
-                DocumentType.InternalPassport,
+                PassportDocumentType.InternalPassport,
                 [passport],
                 mockCheckedPoints,
             )
@@ -242,7 +222,7 @@ describe(`Service DocumentsService`, () => {
 
     describe(`method: hasDocumentInRegistry`, () => {
         it('should return false if document not found', async () => {
-            const documentTypeResponse = <DocumentTypeResponse>'document-type-1'
+            const documentTypeResponse = 'documentType1'
             const documentsToProcess = {
                 [documentTypeResponse]: {
                     status: HttpStatusCode.OK,
@@ -252,19 +232,13 @@ describe(`Service DocumentsService`, () => {
 
             jest.spyOn(service, 'getDocumentsToProcessV1').mockResolvedValueOnce(documentsToProcess)
 
-            expect(await service.hasDocumentInRegistry(<DocumentType>'document-type-2', session.user)).toBeFalsy()
+            expect(await service.hasDocumentInRegistry('document-type-2', session.user)).toBeFalsy()
         })
     })
 
     describe(`method: syncDocumentDataInStorage`, () => {
-        it('should return undefined if international vaccination certificate document given', async () => {
-            expect(
-                await service.syncDocumentDataInStorage(session.user.identifier, DocumentType.InternationalVaccinationCertificate, [], []),
-            ).toBeUndefined()
-        })
-
         it('should return undefined if unsupported document type given', async () => {
-            const unsupportedDocumentType = <DocumentType>'unsupportedDocumentType'
+            const unsupportedDocumentType = 'unsupportedDocumentType'
 
             expect(await service.syncDocumentDataInStorage(session.user.identifier, unsupportedDocumentType, [], [])).toBeUndefined()
             expect(logger.log).toHaveBeenCalledWith('No need to store data for this document type', {
@@ -274,18 +248,8 @@ describe(`Service DocumentsService`, () => {
     })
 
     describe(`method: saveDocumentsInUserProfile`, () => {
-        it('should return undefined if taxpayer card given', async () => {
-            jest.spyOn(envService, 'isProd').mockReturnValueOnce(true)
-
-            const doc = testKit.docs.getTaxpayerCard({ docStatus: DocStatus.Deleting })
-
-            const result = await service.saveDocumentsInUserProfile(session.user.identifier, DocumentType.TaxpayerCard, [doc], headers)
-
-            expect(result).toBeUndefined()
-        })
-
         it('should successfully save documents if not taxpayer card', async () => {
-            const doc = testKit.docs.getInternalPassport()
+            const doc = <InternalPassportInstance>testKit.docs.generateDocument(PassportDocumentType.InternalPassport)
 
             const profileDocument: UserProfileDocument = {
                 documentIdentifier: 'firstIdentifier',
@@ -298,16 +262,21 @@ describe(`Service DocumentsService`, () => {
 
             const message: UserProfileAddDocumentsMessage = {
                 userIdentifier: session.user.identifier,
-                documentType: DocumentType.InternalPassport,
+                documentType: PassportDocumentType.InternalPassport,
                 documents: [profileDocument],
                 headers,
                 removeMissingDocuments: true,
             }
 
-            jest.spyOn(userService, 'saveDocumentsInUserProfile').mockResolvedValueOnce(undefined)
+            jest.spyOn(userService, 'saveDocumentsInUserProfile').mockResolvedValueOnce()
             jest.spyOn(documentsDataMapper, 'toUserProfileDocument').mockReturnValueOnce(profileDocument)
 
-            const result = await service.saveDocumentsInUserProfile(session.user.identifier, DocumentType.InternalPassport, [doc], headers)
+            const result = await service.saveDocumentsInUserProfile(
+                session.user.identifier,
+                PassportDocumentType.InternalPassport,
+                [doc],
+                headers,
+            )
 
             expect(result).toBeUndefined()
             expect(userService.saveDocumentsInUserProfile).toHaveBeenCalledWith(message)
@@ -317,7 +286,7 @@ describe(`Service DocumentsService`, () => {
     describe(`method: getDocument`, () => {
         it('should throw error if unexpected document type given', async () => {
             const params = {
-                documentType: <DocumentType>'wrong-type',
+                documentType: 'wrong-type',
                 documentId: 'documentId',
                 user: session.user,
                 headers,
@@ -330,7 +299,7 @@ describe(`Service DocumentsService`, () => {
 
     describe(`method: getDocuments`, () => {
         it('should return passport', async () => {
-            const filter = [DocumentType.InternalPassport]
+            const filter = [PassportDocumentType.InternalPassport]
             const outputParams = { designSystem: false }
 
             jest.spyOn(envService, 'isStage').mockReturnValueOnce(true)
@@ -340,15 +309,15 @@ describe(`Service DocumentsService`, () => {
                 userIdentifier: session.user.identifier,
             }
 
-            const document = testKit.docs.getInternalPassport()
-            const featurePoints = { documents: [{ documentType: DocumentType.InternalPassport, documentIdentifier: randomUUID() }] }
+            const document = <InternalPassportInstance>testKit.docs.generateDocument(PassportDocumentType.InternalPassport)
+            const featurePoints = { documents: [{ documentType: PassportDocumentType.InternalPassport, documentIdentifier: randomUUID() }] }
 
             const mockCheckedPoints: DocumentsFeaturePointsExistence = {
-                [DocumentType.InternalPassport]: new Set([featurePoints.documents[0].documentIdentifier]),
+                [PassportDocumentType.InternalPassport]: new Set([featurePoints.documents[0].documentIdentifier]),
             }
 
             const decryptedData = {
-                [DocumentType.InternalPassport]: [{ id: document.id }],
+                [PassportDocumentType.InternalPassport]: [{ id: document.id }],
             }
 
             jest.spyOn(service, 'validateUser').mockReturnValueOnce()
@@ -356,7 +325,7 @@ describe(`Service DocumentsService`, () => {
             jest.spyOn(service, 'checkDocumentsFeaturePoints').mockResolvedValueOnce(mockCheckedPoints)
             jest.spyOn(userService, 'getDecryptedDataFromStorage').mockResolvedValueOnce(decryptedData)
 
-            const getPassportDocumentsResponse: GetDocumentsResult<InternalPassport> = {
+            const getPassportDocumentsResponse = {
                 documents: [document],
                 designSystemDocuments: [],
                 unavailableDocuments: [],
@@ -377,13 +346,18 @@ describe(`Service DocumentsService`, () => {
             jest.spyOn(service, 'syncDocumentDataInStorage').mockResolvedValueOnce()
             jest.spyOn(service, 'handleDocumentsPhoto').mockResolvedValueOnce()
 
-            const documentsOrder = [
+            const documentsOrder: DocumentOrderSettingsItem[] = [
                 {
-                    documentType: DocumentType.InternalPassport,
+                    documentType: PassportDocumentType.InternalPassport,
+                    documentIdentifiers: [],
                 },
             ]
 
-            jest.spyOn(userService, 'getDocumentsOrder').mockResolvedValueOnce(documentsOrder)
+            jest.spyOn(userServiceClient, 'getUserDocumentSettings').mockResolvedValueOnce({
+                documentOrderSettings: documentsOrder,
+                documentVisibilitySettings: [],
+            })
+            jest.spyOn(userDocumentSettingsService, 'filterDocuments').mockReturnValueOnce([document])
             jest.spyOn(documentsExpirationService, 'performDocumentsExpirationUpdate').mockResolvedValueOnce()
             jest.spyOn(task, 'publish').mockResolvedValueOnce(true)
 
@@ -397,8 +371,131 @@ describe(`Service DocumentsService`, () => {
                     status: HttpStatusCode.OK,
                     unavailableData: [],
                 },
-                documentsTypeOrder: [DocumentTypeResponse.IdCard],
+                documentsTypeOrder: [PassportDocumentTypeCamelCase.IdCard],
             })
+        })
+    })
+
+    describe(`method: getSortedByDefaultDocumentTypes`, () => {
+        it('should successfully compose and return sorted by default documents types', () => {
+            const someSessionType = <SessionType>'some-session-type'
+            const defaultDocumentService = getDocumentService()
+            const serviceWithSortedByDefaultDocumentTypes = new DocumentsService(
+                analyticsService,
+                [
+                    defaultDocumentService,
+                    {
+                        ...defaultDocumentService,
+                        sessionType: someSessionType,
+                        defaultSortOrder: { ['document-type3']: 200, ['document-type4']: 210 },
+                    },
+                    {
+                        ...defaultDocumentService,
+                        sessionType: someSessionType,
+                        defaultSortOrder: { ['document-type5']: 220, ['document-type6']: 230 },
+                    },
+                ],
+                documentsExpirationService,
+                documentStorageService,
+                documentSettingsService,
+                passportService,
+                taxpayerCardService,
+                userService,
+                userServiceClient,
+                userDocumentSettingsService,
+                documentsDataMapper,
+                appUtils,
+                identifier,
+                envService,
+                logger,
+                task,
+            )
+
+            serviceWithSortedByDefaultDocumentTypes.onRegistrationsFinished()
+
+            const result = serviceWithSortedByDefaultDocumentTypes.getSortedByDefaultDocumentTypes()
+
+            expect(result).toEqual({
+                [SessionType.User]: {
+                    items: ['document-type1', 'internal-passport', 'foreign-passport', 'document-type2'],
+                },
+                [someSessionType]: { items: ['document-type3', 'document-type4', 'document-type5', 'document-type6'] },
+            })
+        })
+
+        it('should fail with error in case some of order number is duplicate for some document types', () => {
+            expect(() => {
+                const serviceWithDuplicatedOrder = new DocumentsService(
+                    analyticsService,
+                    [
+                        getDocumentService({
+                            defaultSortOrder: { ['document-type1']: 20, ['document-type2']: 20 },
+                        }),
+                    ],
+                    documentsExpirationService,
+                    documentStorageService,
+                    documentSettingsService,
+                    passportService,
+                    taxpayerCardService,
+                    userService,
+                    userServiceClient,
+                    userDocumentSettingsService,
+                    documentsDataMapper,
+                    appUtils,
+                    identifier,
+                    envService,
+                    logger,
+                    task,
+                )
+
+                serviceWithDuplicatedOrder.onRegistrationsFinished()
+            }).toThrow(
+                new InternalServerError(`Order number is not unique for document-type2. 20 number already assigned to document-type1`),
+            )
+        })
+    })
+
+    describe(`method: getDocumentNames`, () => {
+        it('should successfully return entire list of document names', () => {
+            const result = service.getDocumentNames([])
+
+            expect(result).toEqual({
+                'document-type1': 'Document type 1 name',
+                'document-type2': 'Document type 2 name',
+                'foreign-passport': 'Закордонний паспорт',
+                'internal-passport': 'Паспорт громадянина України',
+            })
+        })
+
+        it('should successfully return filtered list of document names', () => {
+            const result = service.getDocumentNames(['document-type2'])
+
+            expect(result).toEqual({
+                'document-type2': 'Document type 2 name',
+            })
+        })
+    })
+
+    describe(`method: getSharingRenderDataByDocumentType`, () => {
+        const { user } = testKit.session.getUserSession()
+        const { identifier: requester } = user
+        const requestDateTime = new Date().toISOString()
+        const requestIdentifier = randomUUID()
+
+        it('should successfully call strategy method for valid document type', () => {
+            const documentType = 'document-type'
+
+            const result = service.getSharingRenderDataByDocumentType(documentType, {}, requester, requestDateTime, requestIdentifier)
+
+            expect(result).toEqual(expect.any(Object))
+        })
+
+        it('should fail with error in case document type is not supported', () => {
+            const documentType = 'unsupported-document-type'
+
+            expect(() => {
+                service.getSharingRenderDataByDocumentType(documentType, {}, requester, requestDateTime, requestIdentifier)
+            }).toThrow(new Error(`Unknown scope ${documentType}`))
         })
     })
 })

@@ -2,12 +2,14 @@ import { when } from 'jest-when'
 import { PartialDeep } from 'type-fest'
 
 import { IdentifierService } from '@diia-inhouse/crypto'
-import { EventBus, ExternalCommunicator, InternalEvent } from '@diia-inhouse/diia-queue'
+import { EventBus, ExternalCommunicator } from '@diia-inhouse/diia-queue'
 import TestKit from '@diia-inhouse/test'
-import { DocStatus, DocumentType, DriverLicense, HttpStatusCode, OwnerType } from '@diia-inhouse/types'
+import { DocStatus, HttpStatusCode, OwnerType } from '@diia-inhouse/types'
+import { GetUserDocumentSettingsReq, UserServiceClient } from '@diia-inhouse/user-service-client'
 
 import { DriverLicenseHscServiceProvider } from '@src/documents/driverLicense/interfaces/providers'
 import { RegistryDriverLicenseDTO } from '@src/documents/driverLicense/interfaces/providers/hsc'
+import { DocumentType, DriverLicense } from '@src/documents/driverLicense/interfaces/services'
 import { getDriverLicense } from '@src/documents/driverLicense/providers/hsc/mockData'
 
 import GetDocumentsAction from '@actions/v4/getDocuments'
@@ -22,7 +24,8 @@ import { getPassport } from '@mocks/stubs/providers/eis/passport'
 import { getApp } from '@tests/utils/getApp'
 
 import { ActionResult } from '@interfaces/actions/v4/getDocuments'
-import { DocumentWithCover } from '@interfaces/services/documents'
+import { InternalEvent } from '@interfaces/queue'
+import { CommonDocument, DocumentWithCover } from '@interfaces/services/documents'
 import { GetUserDocumentsParams, GetUserDocumentsResult, UserProfileAddDocumentsMessage } from '@interfaces/services/user'
 
 describe(`Action ${GetDocumentsAction.name}`, () => {
@@ -37,10 +40,11 @@ describe(`Action ${GetDocumentsAction.name}`, () => {
     let identifier: IdentifierService
     let driverLicenseHscProvider: DriverLicenseHscServiceProvider
     let userService: UserService
+    let userServiceClient: UserServiceClient
     let documentsService: DocumentsService
 
     const getDriverLicenseWithCover = (data: PartialDeep<DriverLicense> = {}): DocumentWithCover => {
-        const document = testKit.docs.getDriverLicense(data)
+        const document = <DriverLicense>testKit.docs.generateDocument(DocumentType.DriverLicense, data)
 
         return {
             id: document.id,
@@ -58,6 +62,7 @@ describe(`Action ${GetDocumentsAction.name}`, () => {
         driverLicenseHscProvider = app.container.resolve<DriverLicenseHscServiceProvider>('driverLicenseHscProvider')
         documentsService = app.container.resolve<DocumentsService>('documentsService')
         userService = app.container.resolve<UserService>('userService')
+        userServiceClient = app.container.resolve<UserServiceClient>('userServiceClient')
         eventBus = app.container.resolve<EventBus>('eventBus')
         identifier = app.container.resolve('identifier')!
         external = app.container.resolve('external')
@@ -73,13 +78,15 @@ describe(`Action ${GetDocumentsAction.name}`, () => {
         const docTypeResponse = documentsService.documentTypeToDocumentTypeResponse[documentType]!
         const { headers, session } = testKit.session.getUserActionArguments({}, {}, { validItn: true })
         const expectedDocument = getDriverLicenseWithCover({ id: expect.any(String) })
-        const { id, docStatus } = expectedDocument
+        const { id, docStatus, document } = expectedDocument
         const { user } = session
         const { identifier: userIdentifier } = user
+        const { docNumber } = <CommonDocument>document
 
-        const getDocumentsOrderSpy = jest
-            .spyOn(userService, 'getDocumentsOrder')
-            .mockResolvedValueOnce([{ documentType: DocumentType.DriverLicense }])
+        const getUserDocumentSettingsSpy = jest.spyOn(userServiceClient, 'getUserDocumentSettings').mockResolvedValueOnce({
+            documentOrderSettings: [{ documentType: DocumentType.DriverLicense, documentIdentifiers: [] }],
+            documentVisibilitySettings: [],
+        })
 
         jest.spyOn(userService, 'checkDocumentsFeaturePoints').mockResolvedValueOnce({ documents: [] })
         jest.spyOn(userService, 'getUserDocumentsV1').mockResolvedValueOnce({
@@ -87,7 +94,7 @@ describe(`Action ${GetDocumentsAction.name}`, () => {
                 {
                     documentType,
                     ownerType: OwnerType.owner,
-                    documentIdentifier: identifier.createIdentifier(<string>expectedDocument.document?.docNumber),
+                    documentIdentifier: identifier.createIdentifier(docNumber),
                 },
             ],
         })
@@ -100,7 +107,7 @@ describe(`Action ${GetDocumentsAction.name}`, () => {
                     expect.objectContaining({
                         docId: id,
                         docStatus,
-                        documentIdentifier: identifier.createIdentifier(<string>expectedDocument.document?.docNumber),
+                        documentIdentifier: identifier.createIdentifier(docNumber),
                         ownerType: OwnerType.owner,
                     }),
                 ],
@@ -115,7 +122,11 @@ describe(`Action ${GetDocumentsAction.name}`, () => {
         const result = await getDocumentsAction.handler({ headers, session, params: { filter: [documentType] } })
 
         // Assert
-        expect(getDocumentsOrderSpy).toHaveBeenCalledWith({ userIdentifier })
+        expect(getUserDocumentSettingsSpy).toHaveBeenCalledWith<GetUserDocumentSettingsReq[]>({
+            userIdentifier,
+            features: [],
+            documentsDefaultOrder: expect.any(Object),
+        })
         expect(result).toMatchObject<ActionResult>({
             [docTypeResponse]: {
                 status: HttpStatusCode.OK,
@@ -139,7 +150,10 @@ describe(`Action ${GetDocumentsAction.name}`, () => {
             eng: { identifier: { value: recordNumber } },
         })
 
-        jest.spyOn(userService, 'getDocumentsOrder').mockResolvedValueOnce([{ documentType: DocumentType.DriverLicense }])
+        jest.spyOn(userServiceClient, 'getUserDocumentSettings').mockResolvedValueOnce({
+            documentOrderSettings: [{ documentType: DocumentType.DriverLicense, documentIdentifiers: [] }],
+            documentVisibilitySettings: [],
+        })
         jest.spyOn(eventBus, 'publish').mockResolvedValue(true)
         jest.spyOn(external, 'receiveDirect').mockResolvedValueOnce(getPassport())
         jest.spyOn(external, 'receiveDirect').mockResolvedValueOnce({

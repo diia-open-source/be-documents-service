@@ -1,14 +1,27 @@
 import { AppAction } from '@diia-inhouse/diia-app'
 
-import { ActionVersion, DocumentTypeCamelCase, SessionType } from '@diia-inhouse/types'
+import { ActionVersion, OnInit, SessionType } from '@diia-inhouse/types'
 import { ValidationSchema } from '@diia-inhouse/validators'
 
 import DocumentsService from '@services/documents'
 
 import { ActionResult, CustomActionArguments } from '@interfaces/actions/v1/getDesignSystemDocumentsToProcess'
 
-export default class GetDesignSystemDocumentsToProcess implements AppAction {
-    constructor(private readonly documentsService: DocumentsService) {}
+export default class GetDesignSystemDocumentsToProcess implements AppAction, OnInit {
+    constructor(private readonly documentsService: DocumentsService) {
+        this.validationRules = {
+            documents: {
+                type: 'array',
+                items: {
+                    type: 'object',
+                    props: {
+                        type: { type: 'string', enum: this.documentTypesCamelCase },
+                        eTag: { type: 'string', optional: true },
+                    },
+                },
+            },
+        }
+    }
 
     readonly sessionType: SessionType = SessionType.User
 
@@ -16,17 +29,12 @@ export default class GetDesignSystemDocumentsToProcess implements AppAction {
 
     readonly name: string = 'getDesignSystemDocumentsToProcess'
 
-    readonly validationRules: ValidationSchema<CustomActionArguments['params']> = {
-        documents: {
-            type: 'array',
-            items: {
-                type: 'object',
-                props: {
-                    type: { type: 'string', enum: Object.values(DocumentTypeCamelCase) },
-                    eTag: { type: 'string', optional: true },
-                },
-            },
-        },
+    readonly documentTypesCamelCase: string[] = []
+
+    readonly validationRules: ValidationSchema<CustomActionArguments['params']>
+
+    onInit(): void {
+        this.documentTypesCamelCase.push(...Object.keys(this.documentsService.documentTypeResponseToDocumentType))
     }
 
     async handler(args: CustomActionArguments): Promise<ActionResult> {

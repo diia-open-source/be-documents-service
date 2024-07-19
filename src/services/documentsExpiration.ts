@@ -1,10 +1,10 @@
 import { isEmpty } from 'lodash'
-import { UpdateQuery } from 'mongoose'
 
-import { PluginDepsCollection } from '@diia-inhouse/diia-app'
-
+import { UpdateQuery } from '@diia-inhouse/db'
 import { NotFoundError } from '@diia-inhouse/errors'
-import { DocumentType, DurationMs, Logger } from '@diia-inhouse/types'
+import { DurationMs, Logger, OnRegistrationsFinished } from '@diia-inhouse/types'
+
+import { PassportType } from '@src/generated'
 
 import DocumentSettingsService from '@services/documentSettings'
 
@@ -13,37 +13,41 @@ import documentsExpirationModel from '@models/documentsExpiration'
 import PassportDataMapper from '@dataMappers/passportDataMapper'
 
 import { AppConfig } from '@interfaces/config'
-import { PassportType } from '@interfaces/dto'
 import { DocumentSettingVersion, ExpirationType } from '@interfaces/models/documentSetting'
 import { DocumentIdsExpiration, DocumentsExpirationModel } from '@interfaces/models/documentsExpiration'
 import { Writeable } from '@interfaces/services'
 import { DocumentExpirationService } from '@interfaces/services/documents'
 import { DocumentExpirationModifier, DocumentIdStatus, PassportId } from '@interfaces/services/documentsExpiration'
 import { DocumentsMetaData } from '@interfaces/services/documentsMetaData'
+import { PassportDocumentType } from '@interfaces/services/passport'
 
-export default class DocumentsExpirationService {
-    private readonly documentsToSkipExpiration = Object.values(DocumentType)
+export default class DocumentsExpirationService implements OnRegistrationsFinished {
+    private readonly documentsToSkipExpiration: string[] = Object.values(PassportDocumentType)
 
-    private readonly defaultDocumentsExpirationTime = this.config.app.defaultDocumentExpirationTime
+    private readonly defaultDocumentsExpirationTime
 
-    private readonly documentsWithoutExpirationPerUser: DocumentType[] = [
-        DocumentType.LocalVaccinationCertificate,
-        DocumentType.ChildLocalVaccinationCertificate,
-        DocumentType.InternationalVaccinationCertificate,
-    ]
+    private readonly documentsWithoutExpirationPerUser: string[] = []
 
     private readonly blockedDocumentByAppVersionExpirationTime = 10 * DurationMs.Hour
 
     constructor(
-        private readonly documentExpirationServices: PluginDepsCollection<DocumentExpirationService>,
+        private readonly documentExpirationServices: DocumentExpirationService[],
         private readonly documentSettingsService: DocumentSettingsService,
         private readonly passportDataMapper: PassportDataMapper,
 
         private readonly config: AppConfig,
         private readonly logger: Logger,
     ) {
-        this.loadPluginDeps(this.documentExpirationServices.items)
-        this.documentExpirationServices.on('newItems', (instances) => this.loadPluginDeps(instances))
+        this.defaultDocumentsExpirationTime = this.config.app.defaultDocumentExpirationTime
+    }
+
+    onRegistrationsFinished(): void {
+        for (const instance of this.documentExpirationServices) {
+            const { documentsToSkipExpiration = [], documentsWithoutExpirationPerUser = [] } = instance
+
+            this.documentsToSkipExpiration.push(...documentsToSkipExpiration)
+            this.documentsWithoutExpirationPerUser.push(...documentsWithoutExpirationPerUser)
+        }
     }
 
     async getDocumentsExpiration(mobileUid: string, userIdentifier: string): Promise<DocumentsExpirationModel | null> {
@@ -53,17 +57,17 @@ export default class DocumentsExpirationService {
     async getDocumentIdsExpiration(
         mobileUid: string,
         userIdentifier: string,
-        documentType: DocumentType,
+        documentType: string,
     ): Promise<DocumentIdsExpiration | undefined> {
         const [documentExpiration] = await documentsExpirationModel
             .find({ mobileUid, userIdentifier }, { [documentType]: 1 })
             .sort({ _id: -1 })
 
-        return documentExpiration?.[documentType]
+        return <DocumentIdsExpiration | undefined>documentExpiration?.[documentType]
     }
 
     async collectDocumentExpirationModifier(
-        documentType: DocumentType,
+        documentType: string,
         documentStatuses: DocumentIdStatus[],
         expirationType: ExpirationType,
         customExpirationTime?: number,
@@ -83,9 +87,9 @@ export default class DocumentsExpirationService {
             [`${documentType}.eTag`]: eTag,
         }
 
-        documentStatuses.forEach(({ id, status, ownerType }: DocumentIdStatus) => {
+        for (const { id, status, ownerType } of documentStatuses) {
             modifier[`${documentType}.statuses.${id}`] = { value: status, ownerType }
-        })
+        }
 
         return { expirationTime, modifier }
     }
@@ -119,10 +123,10 @@ export default class DocumentsExpirationService {
             throw new NotFoundError('DocumentsExpiration not found')
         }
 
-        const internalPassportExpiration = documentsExpiration[DocumentType.InternalPassport]
+        const internalPassportExpiration = <DocumentIdsExpiration>documentsExpiration[PassportDocumentType.InternalPassport]
         const internalPassportExpirationStatuses = internalPassportExpiration?.statuses || {}
 
-        if (Object.keys(internalPassportExpirationStatuses).length) {
+        if (Object.keys(internalPassportExpirationStatuses).length > 0) {
             const [id] = Object.keys(internalPassportExpirationStatuses)
 
             return {
@@ -132,10 +136,10 @@ export default class DocumentsExpirationService {
             }
         }
 
-        const foreignPassportExpiration = documentsExpiration[DocumentType.ForeignPassport]
+        const foreignPassportExpiration = <DocumentIdsExpiration>documentsExpiration[PassportDocumentType.ForeignPassport]
         const foreignPassportExpirationStatuses = foreignPassportExpiration?.statuses || {}
 
-        if (Object.keys(foreignPassportExpirationStatuses).length) {
+        if (Object.keys(foreignPassportExpirationStatuses).length > 0) {
             const [id] = Object.keys(foreignPassportExpirationStatuses)
 
             return {
@@ -150,14 +154,14 @@ export default class DocumentsExpirationService {
         throw new NotFoundError('Passports not found')
     }
 
-    async expireDocumentByType(documentType: DocumentType, userIdentifier: string): Promise<void> {
+    async expireDocumentByType(documentType: string, userIdentifier: string): Promise<void> {
         const expirationDate: Date = new Date()
         const expirationsModifier: Writeable<UpdateQuery<DocumentsExpirationModel>> = { $set: { [`${documentType}.date`]: expirationDate } }
 
         await documentsExpirationModel.updateMany({ userIdentifier }, expirationsModifier, { upsert: true })
     }
 
-    checkDocumentExpiration(documentType: DocumentType, documentExpiration?: DocumentIdsExpiration): DocumentsMetaData | undefined {
+    checkDocumentExpiration(documentType: string, documentExpiration?: DocumentIdsExpiration): DocumentsMetaData | undefined {
         if (!documentExpiration || this.documentsToSkipExpiration.includes(documentType) || !this.config.app.isDocumentsExpirationEnabled) {
             return
         }
@@ -198,13 +202,5 @@ export default class DocumentsExpirationService {
             currentDate,
             expirationDate,
         }
-    }
-
-    private loadPluginDeps(instances: DocumentExpirationService[]): void {
-        instances.forEach((instance) => {
-            const { documentsWithoutExpirationPerUser = [] } = instance
-
-            this.documentsWithoutExpirationPerUser.push(...documentsWithoutExpirationPerUser)
-        })
     }
 }

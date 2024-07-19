@@ -1,12 +1,11 @@
 import { GrpcAppAction } from '@diia-inhouse/diia-app'
 
-import { ActionVersion, DocumentType, Localization, SessionType } from '@diia-inhouse/types'
+import { ActionVersion, Localization, SessionType } from '@diia-inhouse/types'
 import { ValidationSchema } from '@diia-inhouse/validators'
 
 import DocumentVerificationService from '@services/documentVerification'
 
 import { ActionResult, CustomActionArguments } from '@interfaces/actions/v1/shareDocument'
-import { ShareDocumentAssertParams } from '@interfaces/services/documentVerification'
 
 export default class ShareDocumentAction implements GrpcAppAction {
     constructor(private readonly documentVerificationService: DocumentVerificationService) {}
@@ -25,22 +24,17 @@ export default class ShareDocumentAction implements GrpcAppAction {
 
     async handler(args: CustomActionArguments): Promise<ActionResult> {
         const {
-            session: {
-                user: { itn, identifier: userIdentifier },
-            },
+            session: { user, features },
             params: { documentId, documentType, localization },
             headers,
         } = args
 
-        const documentAssertParams: ShareDocumentAssertParams = { itn }
-
         const shareDocumentResult = await this.documentVerificationService.generateOtpLink({
-            documentType: <DocumentType>documentType,
+            documentType,
             documentId,
             headers,
-            userIdentifier,
-            documentAssertParams,
-            generateBarcode: true,
+            user,
+            features,
             localization: <Localization>localization,
         })
 

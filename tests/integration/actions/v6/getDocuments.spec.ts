@@ -1,16 +1,7 @@
 import { ExternalCommunicator } from '@diia-inhouse/diia-queue'
 import TestKit from '@diia-inhouse/test'
-import {
-    ActionCode,
-    DocStatus,
-    DocumentType,
-    DocumentTypeCamelCase,
-    HttpStatusCode,
-    Icon,
-    IconAtmActionType,
-    TickerAtmType,
-    TickerAtmUsage,
-} from '@diia-inhouse/types'
+import { ActionCode, DocStatus, HttpStatusCode, Icon, IconAtmActionType, TickerAtmType, TickerAtmUsage } from '@diia-inhouse/types'
+import { DocumentOrderSettingsItem, UserServiceClient } from '@diia-inhouse/user-service-client'
 
 import DocumentsDrfoProvider from '@src/documents/taxpayerCard/providers/drfo/index'
 
@@ -24,7 +15,8 @@ import { getPassport } from '@tests/mocks/stubs/providers/eis/passport'
 import { getApp } from '@tests/utils/getApp'
 
 import { ActionResult } from '@interfaces/actions/v6/getDocuments'
-import { DefaultValue, DocumentMediaAlias, DocumentTypeResponse } from '@interfaces/services/documents'
+import { DefaultValue, DocumentMediaAlias } from '@interfaces/services/documents'
+import { PassportDocumentType, PassportDocumentTypeCamelCase } from '@interfaces/services/passport'
 
 describe(`Action ${GetDocumentsAction.name}`, () => {
     const testKit = new TestKit()
@@ -33,6 +25,7 @@ describe(`Action ${GetDocumentsAction.name}`, () => {
     let getDocumentsAction: GetDocumentsAction
     let external: ExternalCommunicator
     let userService: UserService
+    let userServiceClient: UserServiceClient
     let documentsService: DocumentsService
     let documentsDrfoProvider: DocumentsDrfoProvider
     let documentsExpirationService: DocumentsExpirationService
@@ -43,6 +36,7 @@ describe(`Action ${GetDocumentsAction.name}`, () => {
         getDocumentsAction = app.container.build(GetDocumentsAction)
         external = app.container.resolve('external')
         userService = app.container.resolve<UserService>('userService')
+        userServiceClient = app.container.resolve<UserServiceClient>('userServiceClient')
         documentsService = app.container.resolve<DocumentsService>('documentsService')
         documentsDrfoProvider = app.container.resolve<DocumentsDrfoProvider>('documentsDrfoProvider')
         documentsExpirationService = app.container.resolve<DocumentsExpirationService>('documentsExpirationService')
@@ -74,23 +68,25 @@ describe(`Action ${GetDocumentsAction.name}`, () => {
             })
             const documentSpy = jest.spyOn(external, 'receiveDirect').mockResolvedValue(getPassport())
 
-            const getDocumentsOrderSpy = jest.spyOn(userService, 'getDocumentsOrder').mockImplementation(async () =>
-                Object.values(DocumentType).map((documentType) => ({
+            const getUserDocumentSettingsSpy = jest.spyOn(userServiceClient, 'getUserDocumentSettings').mockResolvedValue({
+                documentOrderSettings: Object.values(PassportDocumentType).map((documentType) => ({
                     documentType,
+                    documentIdentifiers: [],
                 })),
-            )
+                documentVisibilitySettings: [],
+            })
 
             jest.spyOn(userService, 'checkDocumentsFeaturePoints').mockResolvedValue({ documents: [] })
 
             // Act
             const result = await getDocumentsAction.handler({
                 ...actionArgs,
-                params: { filter: [DocumentType.ForeignPassport, DocumentType.InternalPassport] },
+                params: { filter: [PassportDocumentType.ForeignPassport, PassportDocumentType.InternalPassport] },
             })
 
             // Assert
             expect(taxpayerCardSpy).toHaveBeenCalledTimes(1)
-            expect(getDocumentsOrderSpy).toHaveBeenCalledTimes(1)
+            expect(getUserDocumentSettingsSpy).toHaveBeenCalledTimes(1)
             expect(documentSpy).toHaveBeenCalledTimes(1)
             expect(result).toEqual<ActionResult>({
                 idCard: {
@@ -188,10 +184,10 @@ describe(`Action ${GetDocumentsAction.name}`, () => {
                                             iconAtm: {
                                                 componentId: 'icon_ua',
                                                 code: Icon.ellipseKebab,
-                                                accessibilityDescription: DocumentTypeCamelCase.idCard,
+                                                accessibilityDescription: PassportDocumentTypeCamelCase.IdCard,
                                                 action: {
                                                     type: IconAtmActionType.ellipseMenu,
-                                                    subtype: DocumentTypeCamelCase.idCard,
+                                                    subtype: PassportDocumentTypeCamelCase.IdCard,
                                                 },
                                             },
                                         },
@@ -223,6 +219,7 @@ describe(`Action ${GetDocumentsAction.name}`, () => {
                                         type: TickerAtmType.positive,
                                         value: expect.any(String),
                                         action: undefined,
+                                        componentId: expect.any(String),
                                     },
                                 },
                                 {
@@ -370,6 +367,9 @@ describe(`Action ${GetDocumentsAction.name}`, () => {
                                         ],
                                     },
                                 },
+                                {
+                                    verificationCodesOrg: {},
+                                },
                             ],
                         },
                     ],
@@ -472,10 +472,10 @@ describe(`Action ${GetDocumentsAction.name}`, () => {
                                             iconAtm: {
                                                 componentId: 'icon_ua',
                                                 code: Icon.ellipseKebab,
-                                                accessibilityDescription: DocumentTypeCamelCase.foreignPassport,
+                                                accessibilityDescription: PassportDocumentTypeCamelCase.ForeignPassport,
                                                 action: {
                                                     type: IconAtmActionType.ellipseMenu,
-                                                    subtype: DocumentTypeCamelCase.foreignPassport,
+                                                    subtype: PassportDocumentTypeCamelCase.ForeignPassport,
                                                 },
                                             },
                                         },
@@ -543,10 +543,10 @@ describe(`Action ${GetDocumentsAction.name}`, () => {
                                             iconAtm: {
                                                 componentId: 'icon_eng',
                                                 code: Icon.ellipseKebab,
-                                                accessibilityDescription: DocumentTypeCamelCase.foreignPassport,
+                                                accessibilityDescription: PassportDocumentTypeCamelCase.ForeignPassport,
                                                 action: {
                                                     type: IconAtmActionType.ellipseMenu,
-                                                    subtype: DocumentTypeCamelCase.foreignPassport,
+                                                    subtype: PassportDocumentTypeCamelCase.ForeignPassport,
                                                 },
                                             },
                                         },
@@ -577,6 +577,7 @@ describe(`Action ${GetDocumentsAction.name}`, () => {
                                         type: TickerAtmType.positive,
                                         value: expect.any(String),
                                         action: undefined,
+                                        componentId: expect.any(String),
                                     },
                                 },
                                 {
@@ -744,6 +745,9 @@ describe(`Action ${GetDocumentsAction.name}`, () => {
                                         ],
                                     },
                                 },
+                                {
+                                    verificationCodesOrg: {},
+                                },
                             ],
                         },
                     ],
@@ -754,139 +758,23 @@ describe(`Action ${GetDocumentsAction.name}`, () => {
                 documentsTypeOrder: expect.arrayContaining(['foreignPassport', 'idCard']),
             })
         })
-
-        it(`should return taxpayer card`, async () => {
-            // Arrange
-            const actionArgs = testKit.session.getUserActionArguments({}, {}, { validItn: true })
-            const taxpayerCardMock = testKit.docs.getTaxpayerCard()
-            const taxpayerCardSpy = jest.spyOn(documentsDrfoProvider, 'getTaxpayerCard').mockResolvedValue({
-                card: taxpayerCardMock,
-            })
-
-            const getDocumentsOrderSpy = jest.spyOn(userService, 'getDocumentsOrder').mockImplementation(async () =>
-                Object.values(DocumentType).map((documentType) => ({
-                    documentType,
-                })),
-            )
-
-            jest.spyOn(userService, 'checkDocumentsFeaturePoints').mockResolvedValue({ documents: [] })
-
-            // Act
-            const result = await getDocumentsAction.handler({
-                ...actionArgs,
-                params: { filter: [DocumentType.TaxpayerCard] },
-            })
-
-            // Assert
-            expect(taxpayerCardSpy).toHaveBeenCalledTimes(2)
-            expect(getDocumentsOrderSpy).toHaveBeenCalledTimes(1)
-            expect(result).toEqual({
-                taxpayerCard: {
-                    status: HttpStatusCode.OK,
-                    data: [
-                        {
-                            id: taxpayerCardMock.id,
-                            docStatus: DocStatus.Ok,
-                            docNumber: taxpayerCardMock.docNumber,
-                            content: [],
-                            fullInfo: [],
-                            docData: {
-                                docName: 'Картка платника податків',
-                                birthday: taxpayerCardMock.birthday,
-                                rnokpp: taxpayerCardMock.docNumber,
-                                fullName: 'Дія Надія Володимирівна',
-                            },
-                            dataForDisplayingInOrderConfigurations: {
-                                iconRight: {
-                                    code: ActionCode.drag,
-                                },
-                                label: taxpayerCardMock.docNumber,
-                                description: 'Пройшов перевірку Державною податковою службою 13.09.2023',
-                            },
-                            frontCard: {
-                                UA: [
-                                    {
-                                        docHeadingOrg: {
-                                            headingWithSubtitlesMlc: {
-                                                value: 'Картка платника\nподатків',
-                                                subtitles: [],
-                                            },
-                                        },
-                                    },
-                                    {
-                                        subtitleLabelMlc: {
-                                            label: 'РНОКПП',
-                                        },
-                                    },
-                                    {
-                                        tableBlockPlaneOrg: {
-                                            tableSecondaryHeadingMlc: {
-                                                label: 'Дія\nНадія\nВолодимирівна',
-                                            },
-                                            items: [
-                                                {
-                                                    tableItemVerticalMlc: {
-                                                        label: 'Дата народження:',
-                                                        value: taxpayerCardMock.birthday,
-                                                        valueIcons: [],
-                                                        valueImages: [],
-                                                    },
-                                                },
-                                            ],
-                                        },
-                                    },
-                                    {
-                                        tickerAtm: {
-                                            usage: TickerAtmUsage.document,
-                                            type: TickerAtmType.positive,
-                                            value: expect.any(String),
-                                        },
-                                    },
-                                    {
-                                        docButtonHeadingOrg: {
-                                            docNumberCopyMlc: {
-                                                value: taxpayerCardMock.docNumber,
-                                                icon: {
-                                                    code: ActionCode.copy,
-                                                    action: {
-                                                        type: IconAtmActionType.copy,
-                                                    },
-                                                },
-                                            },
-                                            iconAtm: {
-                                                code: Icon.ellipseKebab,
-                                                accessibilityDescription: DocumentTypeCamelCase.taxpayerCard,
-                                                action: {
-                                                    type: IconAtmActionType.ellipseMenu,
-                                                    subtype: DocumentTypeCamelCase.taxpayerCard,
-                                                },
-                                            },
-                                        },
-                                    },
-                                ],
-                                EN: [],
-                            },
-                        },
-                    ],
-                    unavailableData: undefined,
-                    currentDate: expect.any(String),
-                    expirationDate: expect.any(String),
-                },
-                documentsTypeOrder: expect.arrayContaining(['taxpayerCard']),
-            })
-        })
     })
 
     it('should not return document that is not expired', async () => {
         // Arrange
         const actionArgs = testKit.session.getUserActionArguments({}, {}, { validItn: true })
-        const filter = [DocumentType.InternalPassport]
-        const userDocumentsOrder = [{ documentType: DocumentType.InternalPassport }]
+        const filter = [PassportDocumentType.InternalPassport]
+        const userDocumentsOrder: DocumentOrderSettingsItem[] = [
+            { documentType: PassportDocumentType.InternalPassport, documentIdentifiers: [] },
+        ]
 
         jest.spyOn(userService, 'checkDocumentsFeaturePoints').mockResolvedValueOnce({ documents: [] })
-        jest.spyOn(userService, 'getDocumentsOrder').mockResolvedValueOnce(userDocumentsOrder)
+        jest.spyOn(userServiceClient, 'getUserDocumentSettings').mockResolvedValueOnce({
+            documentOrderSettings: userDocumentsOrder,
+            documentVisibilitySettings: [],
+        })
         jest.spyOn(userService, 'getDecryptedDataFromStorage').mockResolvedValue({
-            [DocumentType.InternalPassport]: [{ id: 'unique-doc-number' }],
+            [PassportDocumentType.InternalPassport]: [{ id: 'unique-doc-number' }],
         })
         jest.spyOn(documentsExpirationService, 'checkDocumentExpiration').mockReturnValueOnce({
             currentDate: new Date().toISOString(),
@@ -898,13 +786,13 @@ describe(`Action ${GetDocumentsAction.name}`, () => {
 
         // Assert
         expect(result).toEqual<ActionResult>({
-            [documentsService.documentTypeToDocumentTypeResponse[DocumentType.InternalPassport]!]: {
+            [documentsService.documentTypeToDocumentTypeResponse[PassportDocumentType.InternalPassport]!]: {
                 status: HttpStatusCode.FORBIDDEN,
                 data: [],
                 currentDate: expect.any(String),
                 expirationDate: expect.any(String),
             },
-            documentsTypeOrder: [DocumentTypeResponse.IdCard],
+            documentsTypeOrder: [PassportDocumentTypeCamelCase.IdCard],
         })
     })
 })

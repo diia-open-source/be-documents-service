@@ -1,11 +1,13 @@
 import TestKit, { mockInstance } from '@diia-inhouse/test'
-import { DocumentType } from '@diia-inhouse/types'
 
 import VerifyForeignPassportAction from '@actions/v1/verifyForeignPassport'
 
 import DocumentVerificationService from '@services/documentVerification'
 
 import Utils from '@utils/index'
+
+import { ForeignPassportInstance } from '@interfaces/providers/eis'
+import { PassportDocumentType } from '@interfaces/services/passport'
 
 describe(`Action ${VerifyForeignPassportAction.name}`, () => {
     const testKit = new TestKit()
@@ -23,14 +25,14 @@ describe(`Action ${VerifyForeignPassportAction.name}`, () => {
             headers: { ...headers, token: 'token' },
         }
 
-        const foreignPassport = testKit.docs.getForeignPassport()
+        const foreignPassport: ForeignPassportInstance = testKit.docs.generateDocument(PassportDocumentType.ForeignPassport)
 
         jest.spyOn(documentVerificationService, 'verifyDocument').mockResolvedValueOnce(foreignPassport)
 
         expect(await action.handler(args)).toMatchObject(foreignPassport)
         expect(documentVerificationService.verifyDocument).toHaveBeenCalledWith({
             otp: args.params.otp,
-            documentType: DocumentType.ForeignPassport,
+            documentType: PassportDocumentType.ForeignPassport,
             token: args.headers.token,
         })
     })

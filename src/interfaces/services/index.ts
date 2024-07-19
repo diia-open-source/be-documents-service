@@ -1,4 +1,12 @@
-import { AppUserActionHeaders, DocumentType, PlatformType } from '@diia-inhouse/types'
+import {
+    AppUserActionHeaders,
+    DataForDisplayingInOrderConfigurations,
+    DocumentContentItem,
+    DocumentFrontCard,
+    DocumentFullInfoItem,
+    ListItemMlc,
+    PlatformType,
+} from '@diia-inhouse/types'
 
 import { CommonDocument, DocumentStatusCode } from '@interfaces/services/documents'
 
@@ -34,7 +42,7 @@ export enum DocumentAnalyticsCategory {
 }
 
 export interface DocumentAnalyticsParams {
-    documentType: DocumentType
+    documentType: string
     document?: CommonDocument
     userIdentifier: string
     headers: AppUserActionHeaders
@@ -101,4 +109,19 @@ export interface TextWithParameters {
 export interface NameValue {
     name: string
     value: string
+}
+
+export interface DocumentInstance {
+    id: string
+    docStatus: number
+    docNumber: string
+    docData: Record<string, unknown> & { docName: string }
+    shareLocalization?: string
+    dataForDisplayingInOrderConfigurations?: DataForDisplayingInOrderConfigurations
+    frontCard?: DocumentFrontCard
+    frontCardBackground?: string
+    qr?: string
+    content: DocumentContentItem[]
+    fullInfo: DocumentFullInfoItem[]
+    dataForDisplayingAsListItem?: ListItemMlc
 }

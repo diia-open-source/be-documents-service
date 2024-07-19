@@ -1,10 +1,12 @@
 import { when } from 'jest-when'
 
 import { IdentifierService } from '@diia-inhouse/crypto'
-import { EventBus, InternalEvent } from '@diia-inhouse/diia-queue'
+import { EventBus } from '@diia-inhouse/diia-queue'
 import TestKit from '@diia-inhouse/test'
-import { DocumentType, HttpStatusCode, OwnerType } from '@diia-inhouse/types'
+import { HttpStatusCode, OwnerType } from '@diia-inhouse/types'
+import { GetUserDocumentSettingsReq, UserServiceClient } from '@diia-inhouse/user-service-client'
 
+import { DocumentType, DriverLicense } from '@src/documents/driverLicense/interfaces/services'
 import DriverLicenseHscProvider from '@src/documents/driverLicense/providers/hsc'
 import { getDriverLicense } from '@src/documents/driverLicense/providers/hsc/mockData'
 
@@ -18,6 +20,7 @@ import { photo } from '@providers/testData/photo'
 import { getApp } from '@tests/utils/getApp'
 
 import { ActionResult } from '@interfaces/actions/v2/getDocuments'
+import { InternalEvent } from '@interfaces/queue'
 import { UserProfileAddDocumentsMessage } from '@interfaces/services/user'
 
 describe(`Action ${GetDocumentsAction.name}`, () => {
@@ -29,6 +32,7 @@ describe(`Action ${GetDocumentsAction.name}`, () => {
     let identifier: IdentifierService
     let driverLicenseHscProvider: DriverLicenseHscProvider
     let userService: UserService
+    let userServiceClient: UserServiceClient
     let documentsService: DocumentsService
 
     beforeAll(async () => {
@@ -39,6 +43,7 @@ describe(`Action ${GetDocumentsAction.name}`, () => {
         identifier = app.container.resolve<IdentifierService>('identifier')
         driverLicenseHscProvider = app.container.resolve<DriverLicenseHscProvider>('driverLicenseHscProvider')
         userService = app.container.resolve<UserService>('userService')
+        userServiceClient = app.container.resolve<UserServiceClient>('userServiceClient')
         documentsService = app.container.resolve<DocumentsService>('documentsService')
 
         await app.start()
@@ -52,7 +57,9 @@ describe(`Action ${GetDocumentsAction.name}`, () => {
         [
             DocumentType.DriverLicense,
             (): unknown => jest.spyOn(driverLicenseHscProvider, 'getDriverLicense').mockResolvedValueOnce(getDriverLicense()),
-            testKit.docs.getDriverLicense({ id: `${getDriverLicense().driverLicense[0].id}`, photo }),
+            <DriverLicense>(
+                testKit.docs.generateDocument(DocumentType.DriverLicense, { id: `${getDriverLicense().driverLicense[0].id}`, photo })
+            ),
         ],
     ])('should return %s documents when exists', async (filter, setSpy, expectedDocument) => {
         // Arrange
@@ -65,11 +72,14 @@ describe(`Action ${GetDocumentsAction.name}`, () => {
             },
             headers,
         } = actionArgs
-        const getDocumentsOrderSpy = jest.spyOn(userService, 'getDocumentsOrder').mockImplementationOnce(async () =>
-            Object.values(DocumentType).map((documentType) => ({
+
+        const getUserDocumentSettingsSpy = jest.spyOn(userServiceClient, 'getUserDocumentSettings').mockResolvedValueOnce({
+            documentOrderSettings: Object.values(DocumentType).map((documentType) => ({
                 documentType,
+                documentIdentifiers: [],
             })),
-        )
+            documentVisibilitySettings: [],
+        })
 
         setSpy()
 
@@ -100,7 +110,11 @@ describe(`Action ${GetDocumentsAction.name}`, () => {
         })
 
         // Assert
-        expect(getDocumentsOrderSpy).toHaveBeenCalledWith({ userIdentifier })
+        expect(getUserDocumentSettingsSpy).toHaveBeenCalledWith<GetUserDocumentSettingsReq[]>({
+            userIdentifier,
+            features: [],
+            documentsDefaultOrder: expect.any(Object),
+        })
 
         expect(result).toMatchObject<ActionResult>({
             [docTypeResponse]: {

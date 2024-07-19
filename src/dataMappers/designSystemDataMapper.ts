@@ -1,8 +1,5 @@
-import { PluginDepsCollection } from '@diia-inhouse/diia-app'
-
 import {
     ActionCode,
-    DocumentTypeCamelCase,
     FrontCardItem,
     Icon,
     IconAtmActionType,
@@ -13,133 +10,78 @@ import {
     TickerAtm,
 } from '@diia-inhouse/types'
 
-import { DocumentDesignSystemDataMapper } from '@interfaces/dataMappers'
+import { DesignSystemFrontCardParams } from '@interfaces/dataMappers'
 import { ComponentIdFrontCard, DocumentMediaAlias } from '@interfaces/services/documents'
 
 export default class DesignSystemDataMapper {
-    private readonly docTypeToComponentDocumentName: Partial<Record<DocumentTypeCamelCase, string>> = {}
-
-    constructor(private readonly documentDesignSystemDataMappers: PluginDepsCollection<DocumentDesignSystemDataMapper>) {
-        this.loadPluginDeps(this.documentDesignSystemDataMappers.items)
-        this.documentDesignSystemDataMappers.on('newItems', (instances) => this.loadPluginDeps(instances))
-    }
-
-    getFrontCardWithPhotoDefault(
+    getFrontCard(
         docName: string,
-        docType: DocumentTypeCamelCase,
-        fullName: string,
+        docType: string,
+        bottomLabel: string,
         tickerAtm: TickerAtm,
         items: TableItemMlc[],
-        locale = Localization.UA,
-        isVerification = false,
+        params: DesignSystemFrontCardParams = {},
     ): FrontCardItem[] {
+        const { locale = Localization.UA, withPhoto = true, withEllipseMenu = true, docNumberCopy = false } = params
+        const componentIds = this.getComponentIds(locale)
+
         return [
             {
                 docHeadingOrg: {
-                    componentId: this.getComponentIdWithLocale(
-                        ComponentIdFrontCard.Heading,
-                        locale,
-                        this.docTypeToComponentDocumentName[docType],
-                    ),
+                    componentId: componentIds[ComponentIdFrontCard.Heading],
                     headingWithSubtitlesMlc: {
-                        componentId: this.getComponentIdWithLocale(
-                            ComponentIdFrontCard.DocName,
-                            locale,
-                            this.docTypeToComponentDocumentName[docType],
-                        ),
+                        componentId: componentIds[ComponentIdFrontCard.DocName],
                         value: docName,
                         subtitles: [],
                     },
                 },
             },
-            {
-                tableBlockTwoColumnsPlaneOrg: {
-                    componentId: this.getComponentIdWithLocale(
-                        ComponentIdFrontCard.DocData,
-                        locale,
-                        this.docTypeToComponentDocumentName[docType],
-                    ),
-                    photo: DocumentMediaAlias.Photo,
-                    items,
-                },
-            },
+            withPhoto
+                ? {
+                      tableBlockTwoColumnsPlaneOrg: {
+                          componentId: componentIds[ComponentIdFrontCard.DocData],
+                          photo: DocumentMediaAlias.Photo,
+                          items,
+                      },
+                  }
+                : {
+                      tableBlockPlaneOrg: {
+                          componentId: componentIds[ComponentIdFrontCard.DocData],
+                          items,
+                      },
+                  },
             {
                 tickerAtm: {
                     ...tickerAtm,
-                    componentId: this.getComponentIdWithLocale(
-                        ComponentIdFrontCard.Ticker,
-                        locale,
-                        this.docTypeToComponentDocumentName[docType],
-                    ),
+                    componentId: componentIds[ComponentIdFrontCard.Ticker],
                 },
             },
             {
                 docButtonHeadingOrg: {
-                    componentId: this.getComponentIdWithLocale(
-                        ComponentIdFrontCard.BottomHeading,
-                        locale,
-                        this.docTypeToComponentDocumentName[docType],
-                    ),
-                    headingWithSubtitlesMlc: {
-                        componentId: this.getComponentIdWithLocale(
-                            ComponentIdFrontCard.FullName,
-                            locale,
-                            this.docTypeToComponentDocumentName[docType],
-                        ),
-                        value: fullName,
-                        subtitles: [],
-                    },
-                    ...(!isVerification && {
+                    componentId: componentIds[ComponentIdFrontCard.BottomHeading],
+                    ...(docNumberCopy
+                        ? {
+                              docNumberCopyMlc: {
+                                  componentId: componentIds[ComponentIdFrontCard.FullName],
+                                  value: bottomLabel,
+                                  icon: {
+                                      code: Icon.copy,
+                                      action: {
+                                          type: IconAtmActionType.copy,
+                                      },
+                                  },
+                              },
+                          }
+                        : {
+                              headingWithSubtitlesMlc: {
+                                  componentId: componentIds[ComponentIdFrontCard.FullName],
+                                  value: bottomLabel,
+                                  subtitles: [],
+                              },
+                          }),
+                    ...(withEllipseMenu && {
                         iconAtm: {
-                            componentId: this.getComponentIdWithLocale(
-                                ComponentIdFrontCard.Icon,
-                                locale,
-                                this.docTypeToComponentDocumentName[docType],
-                            ),
-                            code: Icon.ellipseKebab,
-                            accessibilityDescription: docType,
-                            action: {
-                                type: IconAtmActionType.ellipseMenu,
-                                subtype: docType,
-                            },
-                        },
-                    }),
-                },
-            },
-        ]
-    }
-
-    getFrontCardDefault(
-        docName: string,
-        docType: DocumentTypeCamelCase,
-        fullName: string,
-        tickerAtm: TickerAtm,
-        items: TableItemMlc[],
-        isVerification = false,
-    ): FrontCardItem[] {
-        return [
-            {
-                docHeadingOrg: {
-                    headingWithSubtitlesMlc: {
-                        value: docName,
-                        subtitles: [],
-                    },
-                },
-            },
-            {
-                tableBlockPlaneOrg: {
-                    items,
-                },
-            },
-            { tickerAtm },
-            {
-                docButtonHeadingOrg: {
-                    headingWithSubtitlesMlc: {
-                        value: fullName,
-                        subtitles: [],
-                    },
-                    ...(!isVerification && {
-                        iconAtm: {
+                            componentId: componentIds[ComponentIdFrontCard.Icon],
                             code: Icon.ellipseKebab,
                             accessibilityDescription: docType,
                             action: {
@@ -183,15 +125,16 @@ export default class DesignSystemDataMapper {
         }
     }
 
-    getComponentIdWithLocale(value: ComponentIdFrontCard, locale: Localization, docName?: string): string {
-        return [value, docName, locale].filter(Boolean).join('_')
+    getComponentIds(locale = Localization.UA, postfix?: string): Record<ComponentIdFrontCard, string> {
+        const componentIdsData = Object.values(ComponentIdFrontCard).map((name) => [
+            name,
+            this.getComponentIdWithLocale(name, locale, postfix),
+        ])
+
+        return Object.fromEntries(componentIdsData)
     }
 
-    private loadPluginDeps(instances: DocumentDesignSystemDataMapper[]): void {
-        instances.forEach((instance) => {
-            const { documentTypeToComponentDocumentName = {} } = instance
-
-            Object.assign(this.docTypeToComponentDocumentName, documentTypeToComponentDocumentName)
-        })
+    private getComponentIdWithLocale(value: ComponentIdFrontCard, locale: Localization, postfix?: string): string {
+        return [value, postfix, locale].filter(Boolean).join('_')
     }
 }

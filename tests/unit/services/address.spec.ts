@@ -1,7 +1,6 @@
-import { ObjectId } from 'bson'
-
 import { MoleculerService } from '@diia-inhouse/diia-app'
 
+import { mongo } from '@diia-inhouse/db'
 import { mockInstance } from '@diia-inhouse/test'
 import { ActionVersion } from '@diia-inhouse/types'
 
@@ -64,7 +63,7 @@ describe(`Service ${AddressService.name}`, () => {
         it('should return codifier info', async () => {
             const codifier = {
                 name: 'name',
-                categoryId: new ObjectId(),
+                categoryId: new mongo.ObjectId(),
                 level: 'level',
                 koatuu: ['1'],
             }

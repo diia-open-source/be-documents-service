@@ -1,21 +1,10 @@
 import moment from 'moment'
 
-import {
-    ActionCode,
-    DocStatus,
-    DocumentInstance,
-    DocumentType,
-    DocumentTypeCamelCase,
-    Icon,
-    IconAtmActionType,
-    Localization,
-    Logger,
-    TableBlockOrg,
-    UserTokenData,
-} from '@diia-inhouse/types'
+import { ActionCode, DocStatus, Icon, IconAtmActionType, Localization, Logger, TableBlockOrg, UserTokenData } from '@diia-inhouse/types'
 import { utils } from '@diia-inhouse/utils'
 
-import { TaxpayerCard, TaxpayerCardInDocument } from '@src/documents/taxpayerCard/interfaces/services/taxpayer'
+import { DocumentType, DocumentTypeCamelCase, TaxpayerCard } from '@src/documents/taxpayerCard/interfaces/services'
+import { TaxpayerCardInDocument } from '@src/generated'
 
 import DocumentAttributesService from '@services/documentAttributes'
 
@@ -23,9 +12,12 @@ import DesignSystemDataMapper from '@dataMappers/designSystemDataMapper'
 
 import { DocumentDataMapper } from '@interfaces/dataMappers'
 import { RnokppErrorCode } from '@interfaces/providers/drfo'
+import { DocumentInstance } from '@interfaces/services'
 import { DocumentTicker, DocumentTickerCode, DocumentTickerPlaceholder } from '@interfaces/services/documentAttributes'
 
-export default class TaxPayerCardDataMapper implements DocumentDataMapper {
+export default class TaxPayerCardDataMapper implements DocumentDataMapper<TaxpayerCard, DocumentType> {
+    documentTypes: DocumentType[] = [DocumentType.TaxpayerCard]
+
     private readonly rnokppErrorCodeToDocStatus: Record<RnokppErrorCode, DocStatus> = {
         [RnokppErrorCode.Ok]: DocStatus.Ok,
         [RnokppErrorCode.Closed]: DocStatus.NotConfirmed,
@@ -59,8 +51,6 @@ export default class TaxPayerCardDataMapper implements DocumentDataMapper {
 
         private readonly documentAttributesService: DocumentAttributesService,
     ) {}
-
-    documentTypes: DocumentType[] = [DocumentType.TaxpayerCard]
 
     toEntity(user: UserTokenData, error?: RnokppErrorCode): TaxpayerCard {
         const { itn, birthDay, fName, lName, mName, identifier } = user
@@ -192,10 +182,10 @@ export default class TaxPayerCardDataMapper implements DocumentDataMapper {
                             },
                             iconAtm: {
                                 code: Icon.ellipseKebab,
-                                accessibilityDescription: DocumentTypeCamelCase.taxpayerCard,
+                                accessibilityDescription: DocumentTypeCamelCase.TaxpayerCard,
                                 action: {
                                     type: IconAtmActionType.ellipseMenu,
-                                    subtype: DocumentTypeCamelCase.taxpayerCard,
+                                    subtype: DocumentTypeCamelCase.TaxpayerCard,
                                 },
                             },
                         },

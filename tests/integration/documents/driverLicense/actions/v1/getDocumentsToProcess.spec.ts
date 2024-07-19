@@ -1,8 +1,9 @@
 import { ExternalCommunicator } from '@diia-inhouse/diia-queue'
 import TestKit from '@diia-inhouse/test'
-import { DocumentType, HttpStatusCode } from '@diia-inhouse/types'
+import { HttpStatusCode } from '@diia-inhouse/types'
 
 import { DriverLicenseDocumentDTO } from '@src/documents/driverLicense/interfaces/providers/hsc'
+import { DocumentType, DriverLicense } from '@src/documents/driverLicense/interfaces/services'
 import { getDriverLicense } from '@src/documents/driverLicense/providers/hsc/mockData'
 
 import GetDocumentsToProcessAction from '@actions/v1/getDocumentsToProcess'
@@ -42,14 +43,12 @@ describe(`Action ${GetDocumentsToProcessAction.name}`, () => {
         const { session, headers } = testKit.session.getUserActionArguments()
         const documentTypeResponse = documentsService.documentTypeToDocumentTypeResponse[documentFilter]!
         const { unzr: recordNumber } = getPassport()
-        const expectedDocuments = [
-            testKit.docs.getDriverLicense({
+        const expectedDocuments = [<DriverLicense>testKit.docs.generateDocument(DocumentType.DriverLicense, {
                 id: `${getDriverLicense().driverLicense[0].id}`,
                 recordNumber,
                 ua: { identifier: { value: recordNumber } },
                 eng: { identifier: { value: recordNumber } },
-            }),
-        ]
+            })]
 
         jest.spyOn(external, 'receiveDirect').mockResolvedValueOnce(getPassport())
         jest.spyOn(external, 'receiveDirect').mockResolvedValueOnce(

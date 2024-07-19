@@ -1,9 +1,10 @@
 import { when } from 'jest-when'
 
 import { IdentifierService } from '@diia-inhouse/crypto'
-import { EventBus, ExternalCommunicator, InternalEvent } from '@diia-inhouse/diia-queue'
+import { EventBus, ExternalCommunicator } from '@diia-inhouse/diia-queue'
 import TestKit from '@diia-inhouse/test'
-import { DocumentType, HttpStatusCode, OwnerType } from '@diia-inhouse/types'
+import { HttpStatusCode, OwnerType } from '@diia-inhouse/types'
+import { DocumentOrderSettingsItem, GetUserDocumentSettingsReq, UserServiceClient } from '@diia-inhouse/user-service-client'
 
 import GetDocumentsAction from '@actions/v2/getDocuments'
 
@@ -16,7 +17,8 @@ import { getPassport } from '@tests/mocks/stubs/providers/eis/passport'
 import { getApp } from '@tests/utils/getApp'
 
 import { ActionResult } from '@interfaces/actions/v2/getDocuments'
-import { DocumentTypeResponse } from '@interfaces/services/documents'
+import { InternalEvent } from '@interfaces/queue'
+import { PassportDocumentType, PassportDocumentTypeCamelCase } from '@interfaces/services/passport'
 import { UserProfileAddDocumentsMessage } from '@interfaces/services/user'
 
 describe(`Action ${GetDocumentsAction.name}`, () => {
@@ -28,6 +30,7 @@ describe(`Action ${GetDocumentsAction.name}`, () => {
     let eventBus: EventBus
     let identifier: IdentifierService
     let userService: UserService
+    let userServiceClient: UserServiceClient
     let documentsService: DocumentsService
     let documentsExpirationService: DocumentsExpirationService
 
@@ -39,6 +42,7 @@ describe(`Action ${GetDocumentsAction.name}`, () => {
         eventBus = app.container.resolve<EventBus>('eventBus')
         identifier = app.container.resolve<IdentifierService>('identifier')
         userService = app.container.resolve<UserService>('userService')
+        userServiceClient = app.container.resolve<UserServiceClient>('userServiceClient')
         documentsService = app.container.resolve<DocumentsService>('documentsService')
         documentsExpirationService = app.container.resolve<DocumentsExpirationService>('documentsExpirationService')
 
@@ -51,7 +55,7 @@ describe(`Action ${GetDocumentsAction.name}`, () => {
 
     it.each([
         [
-            DocumentType.InternalPassport,
+            PassportDocumentType.InternalPassport,
             (): unknown => jest.spyOn(external, 'receiveDirect').mockImplementationOnce(async () => getPassport()),
             idCard,
         ],
@@ -66,11 +70,13 @@ describe(`Action ${GetDocumentsAction.name}`, () => {
             },
             headers,
         } = actionArgs
-        const getDocumentsOrderSpy = jest.spyOn(userService, 'getDocumentsOrder').mockImplementationOnce(async () =>
-            Object.values(DocumentType).map((documentType) => ({
+        const getUserDocumentSettingsSpy = jest.spyOn(userServiceClient, 'getUserDocumentSettings').mockResolvedValueOnce({
+            documentOrderSettings: Object.values(PassportDocumentType).map((documentType) => ({
                 documentType,
+                documentIdentifiers: [],
             })),
-        )
+            documentVisibilitySettings: [],
+        })
 
         setSpy()
 
@@ -101,7 +107,11 @@ describe(`Action ${GetDocumentsAction.name}`, () => {
         })
 
         // Assert
-        expect(getDocumentsOrderSpy).toHaveBeenCalledWith({ userIdentifier })
+        expect(getUserDocumentSettingsSpy).toHaveBeenCalledWith<GetUserDocumentSettingsReq[]>({
+            userIdentifier,
+            features: [],
+            documentsDefaultOrder: expect.any(Object),
+        })
 
         expect(result).toMatchObject<ActionResult>({
             [docTypeResponse]: {
@@ -117,13 +127,18 @@ describe(`Action ${GetDocumentsAction.name}`, () => {
     it('should not return document that is not expired', async () => {
         // Arrange
         const actionArgs = testKit.session.getUserActionArguments({}, {}, { validItn: true })
-        const filter = [DocumentType.InternalPassport]
-        const userDocumentsOrder = [{ documentType: DocumentType.InternalPassport }]
+        const filter = [PassportDocumentType.InternalPassport]
+        const userDocumentsOrder: DocumentOrderSettingsItem[] = [
+            { documentType: PassportDocumentType.InternalPassport, documentIdentifiers: [] },
+        ]
 
         jest.spyOn(userService, 'checkDocumentsFeaturePoints').mockResolvedValueOnce({ documents: [] })
-        jest.spyOn(userService, 'getDocumentsOrder').mockResolvedValueOnce(userDocumentsOrder)
+        jest.spyOn(userServiceClient, 'getUserDocumentSettings').mockResolvedValueOnce({
+            documentOrderSettings: userDocumentsOrder,
+            documentVisibilitySettings: [],
+        })
         jest.spyOn(userService, 'getDecryptedDataFromStorage').mockResolvedValue({
-            [DocumentType.InternalPassport]: [{ id: 'unique-doc-number' }],
+            [PassportDocumentType.InternalPassport]: [{ id: 'unique-doc-number' }],
         })
         jest.spyOn(documentsExpirationService, 'checkDocumentExpiration').mockReturnValueOnce({
             currentDate: new Date().toISOString(),
@@ -135,13 +150,13 @@ describe(`Action ${GetDocumentsAction.name}`, () => {
 
         // Assert
         expect(result).toEqual<ActionResult>({
-            [documentsService.documentTypeToDocumentTypeResponse[DocumentType.InternalPassport]!]: {
+            [documentsService.documentTypeToDocumentTypeResponse[PassportDocumentType.InternalPassport]!]: {
                 status: HttpStatusCode.FORBIDDEN,
                 data: [],
                 currentDate: expect.any(String),
                 expirationDate: expect.any(String),
             },
-            documentsTypeOrder: [DocumentTypeResponse.IdCard],
+            documentsTypeOrder: [PassportDocumentTypeCamelCase.IdCard],
         })
     })
 })

@@ -8,7 +8,18 @@ import DocumentsService from '@services/documents'
 import { ActionResult, CustomActionArguments } from '@interfaces/actions/v5/getDocuments'
 
 export default class GetDocumentsAction implements AppAction {
-    constructor(private readonly documentsService: DocumentsService) {}
+    constructor(private readonly documentsService: DocumentsService) {
+        this.validationRules = {
+            filter: {
+                type: 'array',
+                items: {
+                    type: 'string',
+                    enum: this.documentsService.allDocumentFilters,
+                },
+                optional: true,
+            },
+        }
+    }
 
     readonly sessionType: SessionType = SessionType.User
 
@@ -16,29 +27,15 @@ export default class GetDocumentsAction implements AppAction {
 
     readonly name: string = 'getDocuments'
 
-    readonly validationRules: ValidationSchema<CustomActionArguments['params']> = {
-        filter: {
-            type: 'array',
-            items: {
-                type: 'string',
-                enum: [
-                    ...this.documentsService.documentFilters,
-                    ...Object.values(this.documentsService.documentFiltersBySessionTypeAndFeature)
-                        .map((val) => Object.values(val))
-                        .flat()
-                        .flat(),
-                ],
-            },
-            optional: true,
-        },
-    }
+    readonly validationRules: ValidationSchema<CustomActionArguments['params']>
 
     async handler(args: CustomActionArguments): Promise<ActionResult> {
+        const { session } = args
         const {
-            params: { filter = this.documentsService.getDocumentsFilterForSession(args.session) },
+            params: { filter = this.documentsService.getDocumentsFilterForSession(session) },
             headers,
         } = args
 
-        return await this.documentsService.getDocuments(args.session, filter, headers)
+        return await this.documentsService.getDocuments(session, filter, headers)
     }
 }

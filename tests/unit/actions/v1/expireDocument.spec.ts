@@ -1,19 +1,20 @@
 import TestKit, { mockInstance } from '@diia-inhouse/test'
-import { DocumentType } from '@diia-inhouse/types'
 
 import ExpireDocumentAction from '@actions/v1/expireDocument'
 
+import DocumentsService from '@services/documents'
 import DocumentsExpirationService from '@services/documentsExpiration'
 
 describe(`Action ${ExpireDocumentAction.name}`, () => {
     const testKit = new TestKit()
     const documentsExpirationServiceMock = mockInstance(DocumentsExpirationService)
-    const action = new ExpireDocumentAction(documentsExpirationServiceMock)
+    const documentsServiceMock = mockInstance(DocumentsService)
+    const action = new ExpireDocumentAction(documentsExpirationServiceMock, documentsServiceMock)
 
     it('should return true and process code if deleted document', async () => {
         const { session, headers } = testKit.session.getUserActionArguments()
         const args = {
-            params: { documentType: <DocumentType>'document-type' },
+            params: { documentType: 'document-type' },
             session,
             headers,
         }

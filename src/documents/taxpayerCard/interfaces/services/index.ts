@@ -1,6 +1,12 @@
-import { DocStatus } from '@diia-inhouse/types'
-
 import { DocumentMetaData } from '@interfaces/services/documentsMetaData'
+
+export enum DocumentType {
+    TaxpayerCard = 'taxpayer-card',
+}
+
+export enum DocumentTypeCamelCase {
+    TaxpayerCard = 'taxpayerCard',
+}
 
 export interface TaxpayerCard extends DocumentMetaData {
     isVisible: boolean
@@ -16,11 +22,4 @@ export interface TaxpayerCard extends DocumentMetaData {
 export interface GetTaxpayerCardResponse {
     card: TaxpayerCard
     expirationTime?: number
-}
-
-export interface TaxpayerCardInDocument {
-    name: string
-    value: string
-    status: DocStatus
-    statusDescription: string
 }

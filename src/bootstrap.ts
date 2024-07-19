@@ -14,10 +14,11 @@ export async function bootstrap(serviceName: string): Promise<void> {
 
     await app.setConfig(configFactory)
 
-    app.setDeps(deps)
-    getLoadDepsFromFolderOptions().forEach((options) => app.loadDepsFromFolder(options))
+    await app.setDeps(deps)
 
-    const { config, start } = app.initialize()
+    await Promise.all(getLoadDepsFromFolderOptions().map((options) => app.loadDepsFromFolder(options)))
+
+    const { config, start } = await app.initialize()
 
     await start()
 

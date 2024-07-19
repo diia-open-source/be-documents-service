@@ -1,7 +1,7 @@
 import moment from 'moment'
 
 import DiiaLogger from '@diia-inhouse/diia-logger'
-import { ExternalCommunicator, ExternalEvent } from '@diia-inhouse/diia-queue'
+import { ExternalCommunicator } from '@diia-inhouse/diia-queue'
 import { NotFoundError } from '@diia-inhouse/errors'
 import TestKit, { mockInstance } from '@diia-inhouse/test'
 import { HttpStatusCode } from '@diia-inhouse/types'
@@ -15,6 +15,9 @@ import PassportByInnDataMapper from '@dataMappers/passportByInnDataMapper'
 import { getPassportByInn } from '@tests/mocks/stubs/providers/dms/passportByInn'
 
 import { PassportGenderEN } from '@interfaces/dto'
+import { InternalPassportInstance } from '@interfaces/providers/eis'
+import { ExternalEvent } from '@interfaces/queue'
+import { PassportDocumentType } from '@interfaces/services/passport'
 
 describe('DocumentsDmsProvider', () => {
     const testKit = new TestKit()
@@ -29,7 +32,7 @@ describe('DocumentsDmsProvider', () => {
         it('should successfully get passport', async () => {
             const registryPassportsByInn = getPassportByInn()
             const { fName, lName, mName, itn } = user
-            const internalPassport = testKit.docs.getInternalPassport()
+            const internalPassport = <InternalPassportInstance>testKit.docs.generateDocument(PassportDocumentType.InternalPassport)
             const expectedPassport = {
                 lastNameUA: internalPassport.lastNameUA,
                 firstNameUA: internalPassport.firstNameUA,

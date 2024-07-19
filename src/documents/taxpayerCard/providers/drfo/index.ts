@@ -1,12 +1,12 @@
 import moment from 'moment'
 
-import { ExternalCommunicator, ExternalEvent } from '@diia-inhouse/diia-queue'
-import { DocStatus, DocumentType, Logger, UserTokenData } from '@diia-inhouse/types'
+import { ExternalCommunicator } from '@diia-inhouse/diia-queue'
+import { DocStatus, Logger, UserTokenData } from '@diia-inhouse/types'
 
 import TaxpayerCardDataMapper from '@src/documents/taxpayerCard/dataMappers/document'
-import { PluginConfig } from '@src/documents/taxpayerCard/interfaces/config'
+import { ExternalEvent, PluginConfig } from '@src/documents/taxpayerCard/interfaces/config'
 import { DocumentsDrfoServiceProvider } from '@src/documents/taxpayerCard/interfaces/providers'
-import { GetTaxpayerCardResponse, TaxpayerCard } from '@src/documents/taxpayerCard/interfaces/services/taxpayer'
+import { DocumentType, GetTaxpayerCardResponse, TaxpayerCard } from '@src/documents/taxpayerCard/interfaces/services'
 
 import { AppConfig } from '@interfaces/config'
 import { RnokppPayload, RnokppResponse } from '@interfaces/providers/drfo'
@@ -19,14 +19,17 @@ export default class DocumentsDrfoProvider implements DocumentsDrfoServiceProvid
         private readonly external: ExternalCommunicator,
         private readonly logger: Logger,
     ) {
+        this.expirationTimeOnSuccessSec = this.config[DocumentType.TaxpayerCard].cardExpirationTimeOnSuccessSec
+        this.expirationTimeOnConfirmingSec = this.config[DocumentType.TaxpayerCard].cardExpirationTimeOnConfirmingSec
+        this.expirationTimeOnNotConfirmedSec = this.config[DocumentType.TaxpayerCard].cardExpirationTimeOnNotConfirmedSec
         this.logger.info('Enabled Drfo provider')
     }
 
-    private readonly expirationTimeOnSuccessSec: number = this.config[DocumentType.TaxpayerCard].cardExpirationTimeOnSuccessSec
+    private readonly expirationTimeOnSuccessSec: number
 
-    private readonly expirationTimeOnConfirmingSec: number = this.config[DocumentType.TaxpayerCard].cardExpirationTimeOnConfirmingSec
+    private readonly expirationTimeOnConfirmingSec: number
 
-    private readonly expirationTimeOnNotConfirmedSec: number = this.config[DocumentType.TaxpayerCard].cardExpirationTimeOnNotConfirmedSec
+    private readonly expirationTimeOnNotConfirmedSec: number
 
     async getTaxpayerCard(user: UserTokenData): Promise<GetTaxpayerCardResponse> {
         const { itn, fName, lName, mName, birthDay } = user
@@ -58,15 +61,19 @@ export default class DocumentsDrfoProvider implements DocumentsDrfoServiceProvid
     private getExpirationTime(card: TaxpayerCard): number {
         let expirationTime: number
         switch (card.docStatus) {
-            case DocStatus.Ok:
+            case DocStatus.Ok: {
                 expirationTime = this.expirationTimeOnSuccessSec
                 break
-            case DocStatus.NotConfirmed:
+            }
+            case DocStatus.NotConfirmed: {
                 expirationTime = this.expirationTimeOnNotConfirmedSec
                 break
+            }
+            // eslint-disable-next-line unicorn/no-useless-switch-case
             case DocStatus.Confirming:
-            default:
+            default: {
                 expirationTime = this.expirationTimeOnConfirmingSec
+            }
         }
 
         return expirationTime

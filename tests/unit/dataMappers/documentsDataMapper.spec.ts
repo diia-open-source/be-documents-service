@@ -4,11 +4,11 @@ const compareVersionsMock = {
 
 jest.mock('compare-versions', () => ({ compare: compareVersionsMock.compare }))
 
-import { randomUUID } from 'crypto'
+import { randomUUID } from 'node:crypto'
 
 import { IdentifierService } from '@diia-inhouse/crypto'
 import TestKit, { mockInstance } from '@diia-inhouse/test'
-import { DocStatus, DocumentType, OwnerType } from '@diia-inhouse/types'
+import { DocStatus, OwnerType } from '@diia-inhouse/types'
 
 import DocumentAttributesService from '@services/documentAttributes'
 
@@ -16,10 +16,12 @@ import DocumentsDataMapper from '@dataMappers/documentsDataMapper'
 
 import Utils from '@utils/index'
 
-import PluginDepsCollectionMock, { getDocumentDataMapper } from '@mocks/stubs/documentDepsCollection'
+import { getDocumentDataMapper } from '@mocks/stubs/documentDepsCollection'
 
+import { InternalPassportInstance } from '@interfaces/providers/eis'
 import { DocumentCover } from '@interfaces/services/documentAttributes'
 import { Document } from '@interfaces/services/documents'
+import { PassportDocumentType } from '@interfaces/services/passport'
 import { UserProfileDocument } from '@interfaces/services/user'
 
 describe('DocumentsDataMapper', () => {
@@ -29,16 +31,13 @@ describe('DocumentsDataMapper', () => {
     const identifier = mockInstance(IdentifierService)
     const documentAttributesServiceMock = mockInstance(DocumentAttributesService)
 
-    const documentsDataMapper = new DocumentsDataMapper(
-        appUtils,
-        identifier,
-        documentAttributesServiceMock,
-        new PluginDepsCollectionMock([getDocumentDataMapper()]),
-    )
+    const documentsDataMapper = new DocumentsDataMapper(appUtils, identifier, documentAttributesServiceMock, [getDocumentDataMapper()])
+
+    documentsDataMapper.onRegistrationsFinished()
 
     describe('method: `toDocumentsWithCover`', () => {
         it('should successfully return documents list with appended cover', () => {
-            const documentType = DocumentType.InternalPassport
+            const documentType = PassportDocumentType.InternalPassport
             const documents = [
                 { id: randomUUID(), docStatus: DocStatus.NotFound },
                 { id: randomUUID(), docStatus: DocStatus.Ok },
@@ -64,7 +63,7 @@ describe('DocumentsDataMapper', () => {
 
     describe(`method: ${documentsDataMapper.toUserProfileDocument.name}`, () => {
         it('should return user profile document', () => {
-            const document = testKit.docs.getInternalPassport()
+            const document: InternalPassportInstance = testKit.docs.generateDocument(PassportDocumentType.InternalPassport)
 
             const documentSubType = 'subtype'
             const documentIdentifier = '123'
@@ -78,7 +77,7 @@ describe('DocumentsDataMapper', () => {
             jest.spyOn(appUtils, 'getDocumentIssueDate').mockReturnValueOnce(issueDate)
             jest.spyOn(identifier, 'createIdentifier').mockReturnValueOnce(documentIdentifier)
 
-            const result = documentsDataMapper.toUserProfileDocument(DocumentType.InternalPassport, document)
+            const result = documentsDataMapper.toUserProfileDocument(PassportDocumentType.InternalPassport, document)
 
             expect(result).toEqual<UserProfileDocument>({
                 documentSubType,

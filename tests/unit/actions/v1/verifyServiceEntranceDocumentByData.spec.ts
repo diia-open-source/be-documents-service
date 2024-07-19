@@ -1,9 +1,10 @@
 import TestKit, { mockInstance } from '@diia-inhouse/test'
-import { DocumentInstance } from '@diia-inhouse/types'
 
 import VerifyServiceEntranceDocumentByDataAction from '@actions/v1/verifyServiceEntranceDocumentByData'
 
 import DocumentVerificationService from '@services/documentVerification'
+
+import { DocumentInstance } from '@interfaces/services'
 
 describe(`Action ${VerifyServiceEntranceDocumentByDataAction.name}`, () => {
     const testKit = new TestKit()

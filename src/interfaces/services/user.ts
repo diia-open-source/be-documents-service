@@ -1,4 +1,4 @@
-import { DocStatus, DocumentType, OwnerType, PlatformType, UserDocumentSubtype, UserFeatures } from '@diia-inhouse/types'
+import { DocStatus, OwnerType, PlatformType, UserFeatures } from '@diia-inhouse/types'
 
 export interface DocumentTypeOrder {
     documentTypeOrder: number
@@ -8,12 +8,12 @@ export interface DocumentTypeOrder {
 }
 
 export interface UserDocumentsOrderResponse {
-    documentType: DocumentType
+    documentType: string
     documentIdentifiers?: string[]
 }
 
 export interface CheckedDocumentPoints {
-    documentType: DocumentType
+    documentType: string
     documentIdentifier: string
 }
 
@@ -25,12 +25,12 @@ export type EncryptedDataByDocumentType = Record<string, string[]>
 
 export interface GetDataFromStorageParams {
     userIdentifier: string
-    documentTypes?: DocumentType[]
+    documentTypes?: string[]
     mobileUid?: string
 }
 
 export interface DocumentFilter {
-    documentType: DocumentType
+    documentType: string
     ownerType?: OwnerType
     docId?: string
     docStatus?: DocStatus[]
@@ -38,11 +38,11 @@ export interface DocumentFilter {
 
 export interface HasDocumentsResult {
     hasDocuments: boolean
-    missingDocumnets: DocumentType[]
+    missingDocumnets: string[]
 }
 
 export interface UserDocument {
-    documentType: DocumentType
+    documentType: string
     documentIdentifier: string
     ownerType: OwnerType
     docId?: string
@@ -53,7 +53,7 @@ export interface UserDocument {
 
 export interface GetUserDocumentsParams {
     userIdentifier: string
-    documentType?: DocumentType
+    documentType?: string
     mobileUid?: string
     activeOnly?: boolean
 }
@@ -65,13 +65,13 @@ export interface GetUserDocumentsResult {
 export interface HasStorageDocumentParams {
     userIdentifier: string
     mobileUid: string
-    documentType: DocumentType
+    documentType: string
     id: string
 }
 
 export interface ProcessUserDocumentsParams {
     userIdentifier: string
-    documentTypes: DocumentType[]
+    documentTypes: string[]
 }
 
 export interface UserDocumentsOrderParams {
@@ -81,7 +81,7 @@ export interface UserDocumentsOrderParams {
 
 export interface UserProfileRemoveDocumentPhotoMessage {
     userIdentifier: string
-    documentType: DocumentType
+    documentType: string
     documentIdentifier: string
 }
 
@@ -91,7 +91,7 @@ export interface UserProfileAddDocumentPhotoMessage extends UserProfileRemoveDoc
 
 export interface UserProfileAddDocumentMessage extends UserProfileDocument {
     userIdentifier: string
-    documentType: DocumentType
+    documentType: string
     headers: {
         mobileUid: string
         platformType: PlatformType
@@ -102,7 +102,7 @@ export interface UserProfileAddDocumentMessage extends UserProfileDocument {
 
 export interface UserProfileAddDocumentsMessage {
     userIdentifier: string
-    documentType: DocumentType
+    documentType: string
     documents: UserProfileDocument[]
     headers: {
         mobileUid?: string
@@ -114,7 +114,7 @@ export interface UserProfileAddDocumentsMessage {
 }
 
 export interface UserProfileDocument {
-    documentSubType?: UserDocumentSubtype | string
+    documentSubType?: string
     documentIdentifier: string
     normalizedDocumentIdentifier?: string
     ownerType: OwnerType
@@ -129,6 +129,6 @@ export interface UserProfileDocument {
 }
 
 export interface UserCompoundDocument {
-    documentType: DocumentType
+    documentType: string
     documentIdentifier: string
 }

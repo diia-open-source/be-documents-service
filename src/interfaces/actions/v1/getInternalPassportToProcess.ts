@@ -4,4 +4,4 @@ import { InternalPassportInstance } from '@interfaces/providers/eis'
 
 export type CustomActionArguments = UserActionArguments
 
-export type ActionResult = InternalPassportInstance
+export type ActionResult = InternalPassportInstance | undefined

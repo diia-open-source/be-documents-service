@@ -2,14 +2,13 @@ const generateStub = jest.fn()
 
 jest.mock('ean13-lib', () => ({ Ean13Utils: { generate: generateStub } }))
 import moment from 'moment'
-import { FilterQuery } from 'mongoose'
 
 import { AuthService, IdentifierService } from '@diia-inhouse/crypto'
-import { MongoDBErrorCode } from '@diia-inhouse/db'
+import { FilterQuery, MongoDBErrorCode } from '@diia-inhouse/db'
 import Logger from '@diia-inhouse/diia-logger'
 import { ApiError, BadRequestError, ModelNotFoundError, NotFoundError } from '@diia-inhouse/errors'
 import TestKit, { mockInstance } from '@diia-inhouse/test'
-import { DocumentType, Localization } from '@diia-inhouse/types'
+import { Localization } from '@diia-inhouse/types'
 
 const documentVerificationOtpModel = {
     create: jest.fn(),
@@ -38,6 +37,7 @@ import { getDocumentVerificationOtpResponse } from '@tests/mocks/stubs/documentV
 
 import { AppConfig } from '@interfaces/config'
 import { DocumentVerificationOtpModel } from '@interfaces/models/documentVerificationOtp'
+import { PassportDocumentType } from '@interfaces/services/passport'
 
 describe(`Service ${DocumentVerificationOtpService.name}`, () => {
     const now = new Date()
@@ -62,16 +62,16 @@ describe(`Service ${DocumentVerificationOtpService.name}`, () => {
         it('should return created document verification otp model', async () => {
             generateStub.mockReturnValue('generated')
 
-            const documentVerificationOtp = getDocumentVerificationOtpResponse(user.identifier, <DocumentType>'document-type')
+            const documentVerificationOtp = getDocumentVerificationOtpResponse(user.identifier, 'document-type')
 
             jest.spyOn(documentVerificationOtpModel, 'create').mockResolvedValueOnce(documentVerificationOtp)
 
-            expect(await service.create(documentVerificationOtp, true, undefined)).toMatchObject(documentVerificationOtp)
+            expect(await service.create(documentVerificationOtp, true)).toMatchObject(documentVerificationOtp)
             expect(documentVerificationOtpModel.create).toHaveBeenCalledWith(documentVerificationOtp)
         })
 
         it('should throw ApiError if error code is different from mongo db duplicate key', async () => {
-            const documentVerificationOtp = getDocumentVerificationOtpResponse(user.identifier, <DocumentType>'document-type')
+            const documentVerificationOtp = getDocumentVerificationOtpResponse(user.identifier, 'document-type')
 
             const err = new ApiError('failed to create a model', 100)
 
@@ -81,7 +81,7 @@ describe(`Service ${DocumentVerificationOtpService.name}`, () => {
         })
 
         it('should throw ApiError if reached max attempts to create verification otp', async () => {
-            const documentVerificationOtp = getDocumentVerificationOtpResponse(user.identifier, <DocumentType>'document-type')
+            const documentVerificationOtp = getDocumentVerificationOtpResponse(user.identifier, 'document-type')
 
             const err = new ApiError('failed to create a model', MongoDBErrorCode.DuplicateKey)
 
@@ -93,7 +93,7 @@ describe(`Service ${DocumentVerificationOtpService.name}`, () => {
 
     describe(`method: ${service.findByKey.name}`, () => {
         it('should return document verification otp model by key', async () => {
-            const documentVerificationOtp = getDocumentVerificationOtpResponse(user.identifier, <DocumentType>'document-type')
+            const documentVerificationOtp = getDocumentVerificationOtpResponse(user.identifier, 'document-type')
 
             jest.spyOn(documentVerificationOtpModel, 'findOne').mockResolvedValueOnce(documentVerificationOtp)
 
@@ -150,30 +150,30 @@ describe(`Service ${DocumentVerificationOtpService.name}`, () => {
         it('should throw NotFoundError if record is undefined', async () => {
             const record = <DocumentVerificationOtpModel>(<unknown>undefined)
 
-            await expect(service.verifyOtp(record, 'token', <DocumentType>'document-type')).rejects.toThrow(
+            await expect(service.verifyOtp(record, 'token', 'document-type')).rejects.toThrow(
                 new NotFoundError('No record with presented code!'),
             )
             expect(logger.debug).toHaveBeenCalledWith('OTP record', record)
         })
 
         it('should throw BadRequestError if this code has been used already', async () => {
-            const documentVerificationOtp = getDocumentVerificationOtpResponse(user.identifier, <DocumentType>'document-type')
+            const documentVerificationOtp = getDocumentVerificationOtpResponse(user.identifier, 'document-type')
 
             const record = <DocumentVerificationOtpModel>{ ...documentVerificationOtp, consumerJWE: 'consumerJWE' }
 
-            await expect(service.verifyOtp(record, 'token', <DocumentType>'document-type')).rejects.toThrow(
+            await expect(service.verifyOtp(record, 'token', 'document-type')).rejects.toThrow(
                 new BadRequestError('This code has been used already!'),
             )
             expect(logger.debug).toHaveBeenCalledWith('OTP record', record)
         })
 
         it('should throw BadRequestError if given wrong doc type', async () => {
-            const documentVerificationOtp = getDocumentVerificationOtpResponse(user.identifier, <DocumentType>'document-type')
+            const documentVerificationOtp = getDocumentVerificationOtpResponse(user.identifier, 'document-type')
 
             const record = <DocumentVerificationOtpModel>documentVerificationOtp
 
-            await expect(service.verifyOtp(record, 'token', DocumentType.InternalPassport)).rejects.toThrow(
-                new BadRequestError(`Document type must be ${DocumentType.InternalPassport}`),
+            await expect(service.verifyOtp(record, 'token', PassportDocumentType.InternalPassport)).rejects.toThrow(
+                new BadRequestError(`Document type must be ${PassportDocumentType.InternalPassport}`),
             )
             expect(logger.debug).toHaveBeenCalledWith('OTP record', record)
         })
@@ -183,15 +183,11 @@ describe(`Service ${DocumentVerificationOtpService.name}`, () => {
 
             expirationDate.setFullYear(new Date().getFullYear() - 1)
 
-            const documentVerificationOtp = getDocumentVerificationOtpResponse(
-                user.identifier,
-                <DocumentType>'document-type',
-                expirationDate,
-            )
+            const documentVerificationOtp = getDocumentVerificationOtpResponse(user.identifier, 'document-type', expirationDate)
 
             const record = <DocumentVerificationOtpModel>documentVerificationOtp
 
-            await expect(service.verifyOtp(record, 'token', <DocumentType>'document-type')).rejects.toThrow(
+            await expect(service.verifyOtp(record, 'token', 'document-type')).rejects.toThrow(
                 new BadRequestError('Code has been expired!', { now, expirationDate: record.expirationDate }),
             )
             expect(logger.debug).toHaveBeenCalledWith('OTP record', record)
@@ -207,11 +203,7 @@ describe(`Service ${DocumentVerificationOtpService.name}`, () => {
 
             expirationDate.setFullYear(new Date().getFullYear() + 1)
 
-            const documentVerificationOtp = getDocumentVerificationOtpResponse(
-                user.identifier,
-                <DocumentType>'document-type',
-                expirationDate,
-            )
+            const documentVerificationOtp = getDocumentVerificationOtpResponse(user.identifier, 'document-type', expirationDate)
 
             const record = <DocumentVerificationOtpModel>(<unknown>documentVerificationOtp)
 
@@ -227,7 +219,7 @@ describe(`Service ${DocumentVerificationOtpService.name}`, () => {
 
             jest.spyOn(documentVerificationDataMapper, 'toVerifyOtpResponse').mockResolvedValueOnce(data)
 
-            expect(await service.verifyOtp(record, 'token', <DocumentType>'document-type')).toMatchObject(data)
+            expect(await service.verifyOtp(record, 'token', 'document-type')).toMatchObject(data)
             expect(logger.debug).toHaveBeenCalledWith('OTP record', record)
             expect(logger.info).toHaveBeenCalledWith('OTP successfully verified', record)
         })
@@ -235,7 +227,9 @@ describe(`Service ${DocumentVerificationOtpService.name}`, () => {
 
     describe(`method: ${service.verifyOTPByBarcode.name}`, () => {
         it('should throw ModelNotFoundError if record not found by barcode', async () => {
-            jest.spyOn(documentVerificationOtpModel, 'findOne').mockResolvedValueOnce(undefined)
+            const findOneResult = undefined
+
+            jest.spyOn(documentVerificationOtpModel, 'findOne').mockResolvedValueOnce(findOneResult)
 
             await expect(service.verifyOTPByBarcode('barcode', 'token')).rejects.toThrow(
                 new ModelNotFoundError('DocumentVerificationOtp', 'No otp record with presented barcode!'),
@@ -246,11 +240,7 @@ describe(`Service ${DocumentVerificationOtpService.name}`, () => {
             const expirationDate = new Date()
 
             expirationDate.setFullYear(new Date().getFullYear() + 1)
-            const documentVerificationOtp = getDocumentVerificationOtpResponse(
-                user.identifier,
-                <DocumentType>'document-type',
-                expirationDate,
-            )
+            const documentVerificationOtp = getDocumentVerificationOtpResponse(user.identifier, 'document-type', expirationDate)
 
             const record = <DocumentVerificationOtpModel>(<unknown>documentVerificationOtp)
 

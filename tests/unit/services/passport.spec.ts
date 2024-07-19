@@ -2,17 +2,22 @@ const mockUtils = {
     handleError: (error: Error, callback: CallableFunction): Promise<void> => callback(error),
 }
 
-jest.mock('@diia-inhouse/utils', () => ({
-    utils: mockUtils,
-}))
+jest.mock('@diia-inhouse/utils', () => {
+    const origin = jest.requireActual('@diia-inhouse/utils')
 
-import { randomUUID } from 'crypto'
+    return {
+        ...origin,
+        ...mockUtils,
+    }
+})
+
+import { randomUUID } from 'node:crypto'
 
 import { merge } from 'lodash'
 import moment from 'moment'
-import { mongo } from 'mongoose'
 
 import { AnalyticsService } from '@diia-inhouse/analytics'
+import { mongo } from '@diia-inhouse/db'
 import DiiaLogger from '@diia-inhouse/diia-logger'
 import { Task } from '@diia-inhouse/diia-queue'
 import {
@@ -24,18 +29,10 @@ import {
     NotFoundError,
 } from '@diia-inhouse/errors'
 import TestKit, { mockInstance } from '@diia-inhouse/test'
-import {
-    AppUser,
-    DocStatus,
-    DocumentType,
-    HttpStatusCode,
-    OwnerType,
-    PassportGenderEN,
-    PassportType,
-    TableBlockOrg,
-} from '@diia-inhouse/types'
+import { AppUser, DocStatus, HttpStatusCode, OwnerType, RowType, TableBlockOrg } from '@diia-inhouse/types'
 
 import TaxpayerCardService from '@src/documents/taxpayerCard/services/document'
+import { PassportGenderEN, PassportType } from '@src/generated'
 
 import AddressService from '@services/address'
 import PassportService from '@services/passport'
@@ -56,6 +53,7 @@ import { RegistrationAddress } from '@interfaces/providers/usdr'
 import { AnalyticsActionResult as ServiceAnalyticsActionResult, AnalyticsCategory as ServiceAnalyticsCategory } from '@interfaces/services'
 import { GetDocumentsParams, GetDocumentsResult } from '@interfaces/services/documents'
 import { AssertStrategyParams } from '@interfaces/services/documentVerification'
+import { PassportDocumentType } from '@interfaces/services/passport'
 
 const addressServiceMock = mockInstance(AddressService)
 const taxpayerCardServiceMock = mockInstance(TaxpayerCardService)
@@ -82,8 +80,8 @@ const passportService = new PassportService(
 const testKit = new TestKit()
 const { user } = testKit.session.getUserSession()
 const { user: portalUser } = testKit.session.getPortalUserSession()
-const foreignPassport = testKit.docs.getForeignPassport()
-const internalPassport = testKit.docs.getInternalPassport()
+const foreignPassport: ForeignPassportInstance = testKit.docs.generateDocument(PassportDocumentType.ForeignPassport)
+const internalPassport: InternalPassportInstance = testKit.docs.generateDocument(PassportDocumentType.InternalPassport)
 
 const registryPassportInstance = {
     type: PassportType.ID,
@@ -115,9 +113,6 @@ const tableBlockOrg: TableBlockOrg = {
     items: [],
 }
 
-const internalPassportInstance: InternalPassportInstance = testKit.docs.getInternalPassport()
-const foreignPassportInstance: ForeignPassportInstance = testKit.docs.getForeignPassport()
-
 describe('Service: PassportService', () => {
     afterEach(() => {
         jest.restoreAllMocks()
@@ -127,7 +122,7 @@ describe('Service: PassportService', () => {
         it('should throw AccessDeniedError if no documents', async () => {
             await expect(
                 passportService.assertDocumentIsValid(<AssertStrategyParams>{
-                    documentType: DocumentType.InternalPassport,
+                    documentType: PassportDocumentType.InternalPassport,
                     ownerType: OwnerType.owner,
                     documentId: randomUUID(),
                     documentAssertParams: {
@@ -143,7 +138,7 @@ describe('Service: PassportService', () => {
 
             await expect(
                 passportService.assertDocumentIsValid(<AssertStrategyParams>{
-                    documentType: DocumentType.InternalPassport,
+                    documentType: PassportDocumentType.InternalPassport,
                     ownerType: OwnerType.owner,
                     documentId: randomUUID(),
                     documentAssertParams: {
@@ -160,7 +155,7 @@ describe('Service: PassportService', () => {
 
             await expect(
                 passportService.assertDocumentIsValid(<AssertStrategyParams>{
-                    documentType: DocumentType.InternalPassport,
+                    documentType: PassportDocumentType.InternalPassport,
                     ownerType: OwnerType.owner,
                     documentId: 'fakeId',
                     documentAssertParams: {
@@ -177,7 +172,7 @@ describe('Service: PassportService', () => {
 
             await expect(
                 passportService.assertDocumentIsValid(<AssertStrategyParams>{
-                    documentType: DocumentType.InternalPassport,
+                    documentType: PassportDocumentType.InternalPassport,
                     ownerType: OwnerType.owner,
                     documentId: internalPassport.id,
                     documentAssertParams: {
@@ -190,7 +185,7 @@ describe('Service: PassportService', () => {
     })
 
     describe('method: `getInternalPassportDocuments`', () => {
-        const documentType = DocumentType.InternalPassport
+        const documentType = PassportDocumentType.InternalPassport
         const itn = 'fake'
 
         it('should throw InternalServerError for request without user parameter', async () => {
@@ -302,7 +297,7 @@ describe('Service: PassportService', () => {
     })
 
     describe('method: `getForeignPassportDocuments`', () => {
-        const documentType = DocumentType.ForeignPassport
+        const documentType = PassportDocumentType.ForeignPassport
         const itn = ''
 
         it('should throw InternalServerError for request without user parameter', async () => {
@@ -353,6 +348,8 @@ describe('Service: PassportService', () => {
         })
 
         it('should throw documentNotFoundError when designSystem is equal to true and context and returned empty array', async () => {
+            const promisedPassports = undefined
+
             jest.spyOn(passportDataMapperMock, 'findForeignPassports').mockReturnValueOnce([])
 
             await expect(
@@ -362,7 +359,7 @@ describe('Service: PassportService', () => {
                     designSystem: true,
                     user,
                     context: {
-                        promisedPassports: Promise.resolve(undefined),
+                        promisedPassports: Promise.resolve(promisedPassports),
                     },
                 }),
             ).rejects.toBeInstanceOf(DocumentNotFoundError)
@@ -381,7 +378,7 @@ describe('Service: PassportService', () => {
                     user,
                     context: {
                         promisedPassports: Promise.resolve(registryPassportDTO),
-                        promisedTaxpayerCardTableOrg: <Promise<TableBlockOrg>>(<unknown>Promise.resolve(undefined)),
+                        promisedTaxpayerCardTableOrg: <Promise<TableBlockOrg>>(<unknown>Promise.resolve()),
                     },
                 }),
             ).rejects.toStrictEqual(expectedError)
@@ -453,10 +450,12 @@ describe('Service: PassportService', () => {
 
     describe('method: `getPassportsEntityByContext`', () => {
         it('should return empty array for undefined documents', async () => {
+            const promisedPassports = undefined
+
             await expect(
                 passportService.getPassportsEntityByContext(
                     {
-                        promisedPassports: Promise.resolve(undefined),
+                        promisedPassports: Promise.resolve(promisedPassports),
                     },
                     user,
                 ),
@@ -623,7 +622,7 @@ describe('Service: PassportService', () => {
 
             jest.spyOn(documentsDmsProviderMock, 'getPassport').mockResolvedValueOnce(passportByInnWithAddressKoatuu)
 
-            jest.spyOn(addressServiceMock, 'findCodifierByKoatuu').mockRejectedValueOnce(new Error())
+            jest.spyOn(addressServiceMock, 'findCodifierByKoatuu').mockRejectedValueOnce(new Error('Error'))
 
             await expect(passportService.getRegistration(user, ['passportByInn'])).resolves.toStrictEqual(
                 merge(
@@ -656,7 +655,7 @@ describe('Service: PassportService', () => {
         })
 
         it('when findCommunityCodeByKodificatorCode throw error store it to log and return registration', async () => {
-            const error = new Error()
+            const error = new Error('Error')
             const registrationByInn = merge(passportByInn, {
                 registration: {
                     address: {
@@ -791,23 +790,19 @@ describe('Service: PassportService', () => {
 
     describe('method: `getRegistrationPlaceForPassport`', () => {
         it('should return currentRegistrationPlaceUA from internal passport', async () => {
-            jest.spyOn(passportDataMapperMock, 'findIdCard').mockReturnValueOnce(internalPassportInstance)
+            jest.spyOn(passportDataMapperMock, 'findIdCard').mockReturnValueOnce(internalPassport)
 
             jest.spyOn(passportDataMapperMock, 'findForeignPassports').mockReturnValueOnce([])
 
-            await expect(passportService.getRegistrationPlaceForPassport(user)).resolves.toBe(
-                internalPassportInstance.currentRegistrationPlaceUA,
-            )
+            await expect(passportService.getRegistrationPlaceForPassport(user)).resolves.toBe(internalPassport.currentRegistrationPlaceUA)
         })
 
         it('should return currentRegistrationPlaceUA from foreign passport', async () => {
             jest.spyOn(passportDataMapperMock, 'findIdCard')
 
-            jest.spyOn(passportDataMapperMock, 'findForeignPassports').mockReturnValueOnce([foreignPassportInstance])
+            jest.spyOn(passportDataMapperMock, 'findForeignPassports').mockReturnValueOnce([foreignPassport])
 
-            await expect(passportService.getRegistrationPlaceForPassport(user)).resolves.toBe(
-                foreignPassportInstance.currentRegistrationPlaceUA,
-            )
+            await expect(passportService.getRegistrationPlaceForPassport(user)).resolves.toBe(foreignPassport.currentRegistrationPlaceUA)
         })
     })
 
@@ -845,7 +840,13 @@ describe('Service: PassportService', () => {
 
             jest.spyOn(passportDataMapperMock, 'findForeignPassports').mockReturnValueOnce([foreignPassport])
 
-            passportService.enrichDocumentWithPhoto(internalPassport, [foreignPassport], analyticsCategory, analyticsAction, analyticsData)
+            passportService.enrichDocumentWithPhoto(internalPassport, [foreignPassport], {
+                analytics: {
+                    category: analyticsCategory,
+                    action: analyticsAction,
+                    data: analyticsData,
+                },
+            })
 
             expect(analyticSpy).toHaveBeenCalledWith(analyticsCategory, analyticsAction, actionResult, analyticsData)
         })
@@ -946,6 +947,240 @@ describe('Service: PassportService', () => {
                     docStatus: DocStatus.Ok,
                 }),
             ).resolves.toStrictEqual(merge(foreignPassport, { shareLocalization: localization }))
+        })
+    })
+
+    describe('method: `getForeignPassportSharingRenderData`', () => {
+        const { identifier: requester } = user
+        const requestDateTime = new Date().toISOString()
+        const requestIdentifier = randomUUID()
+
+        const validForeignPassport: ForeignPassportInstance = testKit.docs.generateDocument(PassportDocumentType.ForeignPassport)
+
+        it(`should successfully compose and return sharing render data for ${PassportDocumentType.ForeignPassport}`, () => {
+            const expectedResult = {
+                documentTitle: 'International Passport',
+                blocks: [
+                    {
+                        logoBlock: {
+                            header: 'International Passport',
+                            title: 'Закордонний паспорт',
+                            subtitle: 'Ukraine • Україна',
+                        },
+                        marginBottom: 24,
+                    },
+                    { hasSeparator: true, marginBottom: 24 },
+                    {
+                        identityBlock: {
+                            lastName: validForeignPassport.lastNameEN,
+                            firstName: validForeignPassport.firstNameEN,
+                            fullName: [validForeignPassport.lastNameUA, validForeignPassport.firstNameUA].join(' '),
+                            documentNumber: validForeignPassport.docNumber,
+                            photo: validForeignPassport.photo,
+                        },
+                        marginBottom: 16,
+                    },
+                    { hasSeparator: true, marginBottom: 16 },
+                    {
+                        textBlock: [
+                            `The digital document copy requested on ${requestDateTime}`,
+                            `Request initiator: ${requester}`,
+                            `Request ID: ${requestIdentifier}`,
+                        ],
+                    },
+                    {
+                        tableBlock: [
+                            [
+                                RowType.TwoColumns,
+                                {
+                                    primaryText: validForeignPassport.eng?.gender?.name,
+                                    secondaryText: validForeignPassport.ua?.gender?.name,
+                                },
+                                {
+                                    primaryText: validForeignPassport.eng?.gender?.value,
+                                    secondaryText: validForeignPassport.ua?.gender?.value,
+                                },
+                            ],
+                            [
+                                RowType.TwoColumns,
+                                {
+                                    primaryText: validForeignPassport.eng?.birthDate?.name,
+                                    secondaryText: validForeignPassport.ua?.birthDate?.name,
+                                },
+                                { primaryText: validForeignPassport.eng?.birthDate?.value },
+                            ],
+                            [
+                                RowType.TwoColumns,
+                                {
+                                    primaryText: validForeignPassport.eng?.nationality?.name,
+                                    secondaryText: validForeignPassport.ua?.nationality?.name,
+                                },
+                                {
+                                    primaryText: validForeignPassport.eng?.nationality?.value,
+                                    secondaryText: validForeignPassport.ua?.nationality?.value,
+                                },
+                            ],
+                            [
+                                RowType.TwoColumns,
+                                {
+                                    primaryText: validForeignPassport.eng?.department?.name,
+                                    secondaryText: validForeignPassport.ua?.department?.name,
+                                },
+                                { primaryText: validForeignPassport.eng?.department?.value },
+                            ],
+                            [
+                                RowType.TwoColumns,
+                                {
+                                    primaryText: validForeignPassport.eng?.issueDate?.name,
+                                    secondaryText: validForeignPassport.ua?.issueDate?.name,
+                                },
+                                { primaryText: validForeignPassport.eng?.issueDate?.value },
+                            ],
+                            [
+                                RowType.TwoColumns,
+                                {
+                                    primaryText: validForeignPassport.eng?.expiryDate?.name,
+                                    secondaryText: validForeignPassport.ua?.expiryDate?.name,
+                                },
+                                { primaryText: validForeignPassport.eng?.expiryDate?.value },
+                            ],
+                            [
+                                RowType.TwoColumns,
+                                {
+                                    primaryText: validForeignPassport.eng?.identifier?.name,
+                                    secondaryText: validForeignPassport.ua?.identifier?.name,
+                                },
+                                { primaryText: validForeignPassport.eng?.identifier?.value },
+                            ],
+                            [
+                                RowType.TwoColumns,
+                                { primaryText: validForeignPassport.eng?.type?.name, secondaryText: validForeignPassport.ua?.type?.name },
+                                { primaryText: validForeignPassport.eng?.type?.value },
+                            ],
+                            [
+                                RowType.TwoColumns,
+                                {
+                                    primaryText: validForeignPassport.eng?.countryCode?.name,
+                                    secondaryText: validForeignPassport.ua?.countryCode?.name,
+                                },
+                                { primaryText: validForeignPassport.eng?.countryCode?.value },
+                            ],
+                            [
+                                RowType.TwoColumns,
+                                {
+                                    primaryText: validForeignPassport.eng?.taxpayer?.name,
+                                    secondaryText: validForeignPassport.ua?.taxpayer?.name,
+                                },
+                                {
+                                    primaryText: ['', ''],
+                                    secondaryText: validForeignPassport.ua?.taxpayer?.statusDescription,
+                                },
+                            ],
+                            [
+                                RowType.TwoColumns,
+                                {
+                                    primaryText: validForeignPassport.eng?.birthPlace?.name,
+                                    secondaryText: validForeignPassport.ua?.birthPlace?.name,
+                                },
+                                {
+                                    primaryText: ` • `,
+                                },
+                            ],
+                            [
+                                RowType.TwoColumns,
+                                {
+                                    primaryText: validForeignPassport.eng?.residenceRegistrationPlace?.name,
+                                    secondaryText: validForeignPassport.ua?.residenceRegistrationPlace?.name,
+                                },
+                                { primaryText: validForeignPassport.eng?.residenceRegistrationPlace?.value },
+                            ],
+                            [RowType.TwoColumnsWithSign, { primaryText: 'Підпис:' }, { primaryText: validForeignPassport.sign }],
+                        ],
+                    },
+                ],
+            }
+            const result = passportService.getForeignPassportSharingRenderData(
+                validForeignPassport,
+                requester,
+                requestDateTime,
+                requestIdentifier,
+            )
+
+            expect(result).toEqual(expectedResult)
+        })
+    })
+
+    describe('method: `getInternalPassportSharingRenderData`', () => {
+        const { identifier: requester } = user
+        const requestDateTime = new Date().toISOString()
+        const requestIdentifier = randomUUID()
+
+        const validInternalPassport: InternalPassportInstance = testKit.docs.generateDocument(PassportDocumentType.InternalPassport)
+
+        it(`should successfully compose and return sharing render data for ${PassportDocumentType.InternalPassport}`, () => {
+            const expectedResult = {
+                documentTitle: 'Internal Passport',
+                blocks: [
+                    { logoBlock: { logoHeader: ['Паспорт громадянина', 'України'], trident: true }, marginBottom: 24 },
+                    { hasSeparator: true, marginBottom: 24 },
+                    {
+                        identityBlock: {
+                            lastName: validInternalPassport.lastNameUA,
+                            firstName: validInternalPassport.firstNameUA,
+                            middleName: validInternalPassport.middleNameUA,
+                            fullName: [validInternalPassport.lastNameEN, validInternalPassport.firstNameEN].join(' '),
+                            documentNumber: validInternalPassport.docNumber,
+                            photo: validInternalPassport.photo,
+                        },
+                        marginBottom: 16,
+                    },
+                    { hasSeparator: true, marginBottom: 16 },
+                    {
+                        textBlock: [
+                            `Запит на цифрові копії документів від ${requestDateTime}`,
+                            `Ініціатор запиту: ${requester}`,
+                            `Ідентифікатор запиту: ${requestIdentifier}`,
+                        ],
+                        marginBottom: 32,
+                    },
+                    {
+                        tableBlock: [
+                            [RowType.TwoColumns, { primaryText: 'Стать:' }, { primaryText: validInternalPassport.genderUA }],
+                            [RowType.TwoColumns, { primaryText: 'Дата народження:' }, { primaryText: validInternalPassport.birthday }],
+                            [RowType.TwoColumns, { primaryText: 'Громадянство:' }, { primaryText: validInternalPassport.nationalityUA }],
+                            [RowType.TwoColumns, { primaryText: 'Орган, що видав:' }, { primaryText: validInternalPassport.department }],
+                            [RowType.TwoColumns, { primaryText: 'Дата видачі:' }, { primaryText: validInternalPassport.issueDate }],
+                            [RowType.TwoColumns, { primaryText: 'Дійсний до:' }, { primaryText: validInternalPassport.expirationDate }],
+                            [
+                                RowType.TwoColumns,
+                                { primaryText: 'РНОКПП:' },
+                                {
+                                    primaryText: [
+                                        validInternalPassport?.taxpayerCard?.number,
+                                        `(Верифіковано у реєстрі Державної податкової служби за запитом від ${validInternalPassport.taxpayerCard?.creationDate})`,
+                                    ],
+                                },
+                            ],
+                            [RowType.TwoColumns, { primaryText: 'Запис № (УНЗР):' }, { primaryText: validInternalPassport.recordNumber }],
+                            [RowType.TwoColumns, { primaryText: 'Місце народження:' }, { primaryText: validInternalPassport.birthPlaceUA }],
+                            [
+                                RowType.TwoColumns,
+                                { primaryText: 'Місце реєстрації проживання:' },
+                                { primaryText: validInternalPassport.currentRegistrationPlaceUA },
+                            ],
+                            [RowType.TwoColumnsWithSign, { primaryText: 'Підпис:' }, { primaryText: validInternalPassport.sign }],
+                        ],
+                    },
+                ],
+            }
+            const result = passportService.getInternalPassportSharingRenderData(
+                validInternalPassport,
+                requester,
+                requestDateTime,
+                requestIdentifier,
+            )
+
+            expect(result).toEqual(expectedResult)
         })
     })
 })

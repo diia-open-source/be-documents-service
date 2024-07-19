@@ -1,6 +1,6 @@
 import { BadRequestError } from '@diia-inhouse/errors'
 import TestKit, { mockInstance } from '@diia-inhouse/test'
-import { DocumentType, SessionType } from '@diia-inhouse/types'
+import { SessionType } from '@diia-inhouse/types'
 
 import GetDocumentsAction from '@src/actions/v2/getDocuments'
 
@@ -10,9 +10,9 @@ import { CustomActionArguments } from '@interfaces/actions/v2/getDocuments'
 
 describe('GetDocumentsAction', () => {
     const documentsServiceMock = mockInstance(DocumentsService, {
-        documentFilters: [<DocumentType>'document-filter-1', <DocumentType>'document-filter-2'],
+        documentFilters: ['document-filter-1', 'document-filter-2'],
         documentFiltersBySessionType: {
-            [SessionType.User]: [<DocumentType>'document-filter-3', <DocumentType>'document-filter-4'],
+            [SessionType.User]: ['document-filter-3', 'document-filter-4'],
             [SessionType.CabinetUser]: undefined,
         },
     })
@@ -27,15 +27,11 @@ describe('GetDocumentsAction', () => {
     })
 
     it('should get documents with provided filter', async () => {
-        const documents = {
-            documentsTypeOrder: ['document-type'],
-            expirationDate: new Date().toLocaleDateString(),
-            currentDate: new Date().toLocaleDateString(),
-        }
+        const documents = { documentsTypeOrder: ['document-type'] }
 
         const customActionArguments: CustomActionArguments = {
             session: userSession,
-            params: { filter: [<DocumentType>'document-filter-1'] },
+            params: { filter: ['document-filter-1'] },
             headers,
         }
 

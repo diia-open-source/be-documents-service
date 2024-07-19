@@ -1,10 +1,11 @@
 import { isObject } from 'lodash'
 
-import { ExternalCommunicator, ExternalEvent } from '@diia-inhouse/diia-queue'
+import { ExternalCommunicator } from '@diia-inhouse/diia-queue'
 import { DocumentNotFoundError, ErrorType } from '@diia-inhouse/errors'
 import { Logger } from '@diia-inhouse/types'
 
 import DriverLicenseDataMapper from '@src/documents/driverLicense/dataMappers/document'
+import { ExternalEvent } from '@src/documents/driverLicense/interfaces/config'
 import { DriverLicenseHscServiceProvider } from '@src/documents/driverLicense/interfaces/providers'
 import { DriverLicenseFull, RegistryDriverLicenseDTO } from '@src/documents/driverLicense/interfaces/providers/hsc'
 

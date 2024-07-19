@@ -1,9 +1,8 @@
-import { randomUUID } from 'crypto'
-
-import { ObjectId } from 'bson'
+import { randomUUID } from 'node:crypto'
 
 import { MoleculerService } from '@diia-inhouse/diia-app'
 
+import { mongo } from '@diia-inhouse/db'
 import DiiaLogger from '@diia-inhouse/diia-logger'
 import TestKit, { mockInstance } from '@diia-inhouse/test'
 import { ActionVersion } from '@diia-inhouse/types'
@@ -26,7 +25,7 @@ describe(`Service ${NotificationService.name}`, () => {
             }
 
             const notificationByResourceType = {
-                _id: new ObjectId(),
+                _id: new mongo.ObjectId(),
                 hashId: randomUUID(),
                 userIdentifier: user.identifier,
                 isRead: false,
@@ -53,7 +52,7 @@ describe(`Service ${NotificationService.name}`, () => {
             }
 
             const notificationByResourceType = {
-                _id: new ObjectId(),
+                _id: new mongo.ObjectId(),
                 hashId: randomUUID(),
                 userIdentifier: user.identifier,
                 isRead: false,

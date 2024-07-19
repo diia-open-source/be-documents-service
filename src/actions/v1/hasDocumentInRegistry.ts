@@ -1,6 +1,6 @@
 import { AppAction } from '@diia-inhouse/diia-app'
 
-import { ActionVersion, DocumentType, SessionType } from '@diia-inhouse/types'
+import { ActionVersion, SessionType } from '@diia-inhouse/types'
 import { ValidationSchema } from '@diia-inhouse/validators'
 
 import DocumentsService from '@services/documents'
@@ -8,7 +8,11 @@ import DocumentsService from '@services/documents'
 import { ActionResult, CustomActionArguments } from '@interfaces/actions/v1/hasDocumentInRegistry'
 
 export default class HasDocumentInRegistryAction implements AppAction {
-    constructor(private readonly documentsService: DocumentsService) {}
+    constructor(private readonly documentsService: DocumentsService) {
+        this.validationRules = {
+            documentType: { type: 'string', enum: this.documentsService.documentTypes },
+        }
+    }
 
     readonly sessionType: SessionType = SessionType.User
 
@@ -16,9 +20,7 @@ export default class HasDocumentInRegistryAction implements AppAction {
 
     readonly name: string = 'hasDocumentInRegistry'
 
-    readonly validationRules: ValidationSchema<CustomActionArguments['params']> = {
-        documentType: { type: 'string', enum: Object.values(DocumentType) },
-    }
+    readonly validationRules: ValidationSchema<CustomActionArguments['params']>
 
     async handler(args: CustomActionArguments): Promise<ActionResult> {
         const {

@@ -1,5 +1,4 @@
 import TestKit, { mockInstance } from '@diia-inhouse/test'
-import { DocumentType } from '@diia-inhouse/types'
 
 import VerifyInternalPassportAction from '@actions/v1/verifyInternalPassport'
 
@@ -10,6 +9,7 @@ import Utils from '@utils/index'
 import { idCard } from '@tests/mocks/stubs/passport'
 
 import { InternalPassportInstance } from '@interfaces/providers/eis'
+import { PassportDocumentType } from '@interfaces/services/passport'
 
 describe(`Action ${VerifyInternalPassportAction.name}`, () => {
     const testKit = new TestKit()
@@ -34,7 +34,7 @@ describe(`Action ${VerifyInternalPassportAction.name}`, () => {
         expect(await action.handler(args)).toMatchObject(identity)
         expect(documentVerificationService.verifyDocument).toHaveBeenCalledWith({
             otp: args.params.otp,
-            documentType: DocumentType.InternalPassport,
+            documentType: PassportDocumentType.InternalPassport,
             token: args.headers.token,
         })
     })

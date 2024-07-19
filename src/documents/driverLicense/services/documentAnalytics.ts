@@ -1,5 +1,4 @@
-import { DocumentType } from '@diia-inhouse/types'
-
+import { DocumentType } from '@src/documents/driverLicense/interfaces/services'
 import { AnalyticsActionType } from '@src/documents/driverLicense/interfaces/services/analytics'
 
 import { DocumentAnalyticsService } from '@interfaces/services/documents'

@@ -1,24 +1,25 @@
 import TestKit, { mockInstance } from '@diia-inhouse/test'
-import { DocumentType } from '@diia-inhouse/types'
 
 import ExpireDocumentAction from '@actions/v2/expireDocument'
 
+import DocumentsService from '@services/documents'
 import DocumentsExpirationService from '@services/documentsExpiration'
 
 describe('ExpireDocumentAction', () => {
     const testKit = new TestKit()
-    const documentsExpirationServiceMock = mockInstance(DocumentsExpirationService)
+    const documentsService = mockInstance(DocumentsService)
+    const documentsExpirationService = mockInstance(DocumentsExpirationService)
 
-    const action = new ExpireDocumentAction(documentsExpirationServiceMock)
+    const action = new ExpireDocumentAction(documentsService, documentsExpirationService)
 
     const {
         user: { identifier },
     } = testKit.session.getUserSession()
     const headers = testKit.session.getHeaders()
-    const documentType = <DocumentType>'document-type'
+    const documentType = 'document-type'
 
     it('should call documentsExpirationService', async () => {
-        const expireDocumentByTypeSpy = jest.spyOn(documentsExpirationServiceMock, 'expireDocumentByType')
+        const expireDocumentByTypeSpy = jest.spyOn(documentsExpirationService, 'expireDocumentByType')
         const customActionArguments = {
             params: {
                 documentType,

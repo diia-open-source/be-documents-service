@@ -1,13 +1,17 @@
-import path from 'path'
+import path from 'node:path'
 
 import { LoadedModuleDescriptor } from 'awilix/lib/load-modules'
 import { globSync } from 'glob'
 import { camelCase, upperFirst } from 'lodash'
 import { singular } from 'pluralize'
 
-import { DepsResolver, LoadDepsFromFolderOptions } from '@diia-inhouse/diia-app'
+import { LoadDepsFromFolderOptions, NameAndRegistrationPair } from '@diia-inhouse/diia-app'
 
 import { AppConfig } from '@interfaces/config'
+import { PassportDocumentType } from '@interfaces/services/passport'
+
+const serviceEntries = ['', 'Analytics', 'Attributes', 'Expiration', 'Pdf']
+const dataMapperEntries = ['', 'DesignSystem']
 
 function nameFormatter(descriptor: LoadedModuleDescriptor, folderName: string, depType: string): string {
     const parsedPath = path.parse(descriptor.path)
@@ -24,28 +28,17 @@ function nameFormatter(descriptor: LoadedModuleDescriptor, folderName: string, d
     return camelCase(`${dependencyPath.join('')}${upperFirst(depType)}`)
 }
 
-function getLoadDocumentDep(folderName: string, fileMask: string, groupName?: string, pluginGroupName?: string): LoadDepsFromFolderOptions {
-    const [docType, depDir] = folderName.split(/[\\/]/).slice(-2)
+function getLoadDocumentDep(folderName: string, fileMask: string, groupName?: string): LoadDepsFromFolderOptions {
+    const [docType, depDir] = folderName.split(path.posix.sep).slice(-2)
     const depType = singular(depDir)
 
     return {
         folderName,
-        pluginGroupName,
         nameFormatter: (name, descriptor): string => {
-            if ((depType === 'service' || depType === 'dataMapper') && name === 'document') {
-                return `${docType}${upperFirst(depType)}`
-            }
+            const entryName = serviceEntries.find((entry) => name === `document${entry}`)
 
-            if ((depType === 'service' || depType === 'dataMapper') && name === 'documentAnalytics') {
-                return `${docType}Analytics${upperFirst(depType)}`
-            }
-
-            if ((depType === 'service' || depType === 'dataMapper') && name === 'documentAttributes') {
-                return `${docType}Attributes${upperFirst(depType)}`
-            }
-
-            if ((depType === 'service' || depType === 'dataMapper') && name === 'documentExpiration') {
-                return `${docType}Expiration${upperFirst(depType)}`
+            if (['service', 'dataMapper'].includes(depType) && entryName !== undefined) {
+                return [docType, entryName, upperFirst(depType)].join('')
             }
 
             return nameFormatter(descriptor, folderName, depType)
@@ -65,32 +58,48 @@ function getLoadDocumentFolderDeps(folder: string): LoadDepsFromFolderOptions[] 
         getLoadDocumentDep(`${dir}/eventListeners`, '**/*.js', 'eventListenerList'),
         getLoadDocumentDep(`${dir}/externalEventListeners`, '**/*.js', 'externalEventListenerList'),
         getLoadDocumentDep(`${dir}/dataMappers`, '**/*.js'),
-        getLoadDocumentDep(`${dir}/dataMappers`, '**/document.js', undefined, 'documentDataMappers'),
-        getLoadDocumentDep(`${dir}/dataMappers`, '**/documentDesignSystem.js', undefined, 'documentDesignSystemDataMappers'),
+        ...dataMapperEntries.map((entryName) =>
+            getLoadDocumentDep(`${dir}/dataMappers`, `**/document${entryName}.js`, `document${entryName}DataMappers`),
+        ),
         getLoadDocumentDep(`${dir}/services`, '**/*.js'),
-        getLoadDocumentDep(`${dir}/services`, '**/document.js', undefined, 'documentServices'),
-        getLoadDocumentDep(`${dir}/services`, '**/documentAnalytics.js', undefined, 'documentAnalyticsServices'),
-        getLoadDocumentDep(`${dir}/services`, '**/documentAttributes.js', undefined, 'documentAttributesServices'),
-        getLoadDocumentDep(`${dir}/services`, '**/documentExpiration.js', undefined, 'documentExpirationServices'),
+        ...serviceEntries.map((entryName) =>
+            getLoadDocumentDep(`${dir}/services`, `**/document${entryName}.js`, `document${entryName}Services`),
+        ),
     ]
 }
 
 export const getLoadDepsFromFolderOptions = (): LoadDepsFromFolderOptions[] => {
     const documentFolders = globSync(`dist/documents/*/`)
 
-    return documentFolders.map((folder) => getLoadDocumentFolderDeps(folder)).flat()
+    return documentFolders.flatMap((folder) => getLoadDocumentFolderDeps(folder))
 }
 
-export const getProvidersDeps = (config: AppConfig): DepsResolver<Record<string, unknown>> => {
+export const getProvidersDeps = (config: AppConfig): NameAndRegistrationPair<Record<string, unknown>> => {
     const files = globSync('dist/documents/*/providers/index.js')
+    let deps: NameAndRegistrationPair<Record<string, unknown>> = {}
 
-    return files.reduce((deps, file) => {
+    for (const file of files) {
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { getProvidersDeps: getDocumentProvidersDeps } = require(path.resolve(process.cwd(), file))
 
-        return {
+        deps = {
             ...deps,
             ...getDocumentProvidersDeps(config),
         }
-    }, {})
+    }
+
+    return deps
 }
+
+const getDocumentTypes = (): string[] => {
+    const files = globSync('dist/documents/*/interfaces/services/index.js')
+
+    return files.flatMap((file): string[] => {
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const { DocumentType } = require(path.resolve(process.cwd(), file))
+
+        return Object.values(DocumentType)
+    })
+}
+
+export const documentTypes = [...Object.values(PassportDocumentType), ...getDocumentTypes()]

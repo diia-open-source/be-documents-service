@@ -1,10 +1,10 @@
-import { DocStatus, DocumentType, OwnerType } from '@diia-inhouse/types'
+import { DocStatus, OwnerType } from '@diia-inhouse/types'
 
 import { DocumentVerificationOtp } from '@interfaces/models/documentVerificationOtp'
 
 export const getDocumentVerificationOtpResponse = (
     userIdentifier: string,
-    registryDocumentType: DocumentType,
+    registryDocumentType: string,
     expirationDate = new Date(),
 ): DocumentVerificationOtp => ({
     userIdentifier,

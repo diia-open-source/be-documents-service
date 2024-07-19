@@ -1,23 +1,22 @@
 /* eslint-disable @typescript-eslint/no-shadow */
 import { DocumentDecryptedData } from '@diia-inhouse/crypto'
+import { Env } from '@diia-inhouse/env'
 import {
     ActHeaders,
     AppUser,
     AppUserActionHeaders,
     DocStatus,
     DocumentCommon,
-    DocumentInstance,
     DocumentMetaData,
-    DocumentType,
-    DocumentTypeCamelCase,
+    GenericObject,
     HttpStatusCode,
     Localization,
+    NameValue,
     PlatformType,
     ProfileFeature,
     SessionType,
     TableBlockOrg,
     TickerAtm,
-    UnavailableDocument,
     UserActionHeaders,
     UserFeatures,
     UserTokenData,
@@ -25,35 +24,36 @@ import {
 
 import { RegistryPassportDTO } from '@interfaces/dto'
 import { ExpirationType } from '@interfaces/models/documentSetting'
+import { DocumentsExpirationModel } from '@interfaces/models/documentsExpiration'
 import {
     TaxpayerCard as EmbeddedTaxpayerCard,
     ForeignPassportInstance,
     InternalPassportInstance,
     Passport,
 } from '@interfaces/providers/eis'
-import { AnalyticsActionResult } from '@interfaces/services'
+import { AnalyticsActionResult, DocumentInstance } from '@interfaces/services'
 import { DocumentDecryptedDataByDocumentType } from '@interfaces/services/cryptData'
 import { DocumentCover, DocumentTicker, DocumentTickerCode } from '@interfaces/services/documentAttributes'
 import { DocumentsMetaData } from '@interfaces/services/documentsMetaData'
 import {
     AssertStrategyParams,
-    DocumentTypeDefinerByQrCodeStrategy,
     DocumentVerifyParams,
+    ShareSettings,
     VerificationResponse,
     VerifyOtpResponse,
 } from '@interfaces/services/documentVerification'
 import { UserDocumentsOrderResponse, UserProfileDocument } from '@interfaces/services/user'
 
-export enum DocumentTypeResponse {
-    IdCard = 'idCard',
-    ForeignPassport = 'foreignPassport',
+export enum DefaultValue {
+    NotProvided = 'Не вказано',
+    NotProvidedEN = 'Not Provided',
 }
 
 export type DocumentStatusCode<T = HttpStatusCode> = HttpStatusCode | T
 
 export type Document = InternalPassportInstance | ForeignPassportInstance
 
-export type DocumentWithPhoto = CommonDocument & { photo: string }
+export type DocumentWithPhoto = CommonDocument & { photo?: string }
 
 export enum ComponentIdFrontCard {
     BirthDate = 'birth_date',
@@ -102,8 +102,20 @@ export interface GetDocumentsOutputParams {
     designSystem?: boolean
 }
 
+export interface UnavailableDocument {
+    id: string
+}
+
 export interface UnavailableDocumentWithStatusCode extends UnavailableDocument {
     statusCode: HttpStatusCode
+}
+
+export interface UserDocumentsOrderDTO extends UserDocumentsOrderResponse {
+    documentFilter: string
+}
+
+export interface NameValueWithCode extends NameValue {
+    code?: string
 }
 
 export interface DocumentResponse<T extends DocumentResponseVariation> extends DocumentsMetaData {
@@ -112,31 +124,19 @@ export interface DocumentResponse<T extends DocumentResponseVariation> extends D
     unavailableData?: UnavailableDocument[]
 }
 
-export type Documents<T extends DocumentResponseVariation> = Partial<Record<DocumentTypeResponse, DocumentResponse<T>>>
-
-export enum DefaultValue {
-    NotProvided = 'Не вказано',
-    NotProvidedEN = 'Not Provided',
-}
-
-export interface UserDocumentsOrderDTO extends UserDocumentsOrderResponse {
-    documentFilter: DocumentTypeResponse
-}
-
 export type DocumentsTypeOrder = {
     documentsTypeOrder: string[]
 }
 
-export type DocumentsWithOrder<T extends DocumentResponseVariation> = Documents<T> & DocumentsTypeOrder
+export type Documents<T extends DocumentResponseVariation> = Record<string, DocumentResponse<T>>
 
-export type DocumentsFeaturePointsExistence = Partial<Record<DocumentType, Set<string>>>
-
-export enum IdentityDocumentType {
-    InternalPassport = DocumentType.InternalPassport,
-    ForeignPassport = DocumentType.ForeignPassport,
+export interface DocumentsWithOrder<T extends DocumentResponseVariation> extends DocumentsTypeOrder {
+    [key: string]: DocumentResponse<T> | string[]
 }
 
-export type IdentityDocument = { identityType: DocumentType } & (Passport | unknown)
+export type DocumentsFeaturePointsExistence = Partial<Record<string, Set<string>>>
+
+export type IdentityDocument = { identityType: string } & (Passport | unknown)
 
 export interface GetDocumentsContext {
     promisedPassports?: Promise<RegistryPassportDTO | undefined>
@@ -157,12 +157,12 @@ export interface DocumentsToProcessOptions {
     id: string // filter by id
 }
 
-export type GetDocumentToProcessOptions = Partial<Record<DocumentType, DocumentsToProcessOptions>>
+export type GetDocumentToProcessOptions = Record<string, DocumentsToProcessOptions>
 
 export type CommonDocument = (DocumentMetaData | DocumentCommon) & { id: string; taxpayerCard?: EmbeddedTaxpayerCard }
 
-export interface GetDocumentsParams {
-    documentType: DocumentType
+export interface GetDocumentsParams<T extends string = string> {
+    documentType: T
     itn: string
     designSystem: boolean
     user?: AppUser
@@ -192,11 +192,11 @@ export type GetDocumentsStrategy<T extends CommonDocument = CommonDocument> = (p
 export type EnrichUserProfileDocumentStrategy = (
     profileDocument: UserProfileDocument,
     document: CommonDocument,
-    documentType?: DocumentType,
+    documentType?: string,
 ) => UserProfileDocument
 
 export interface GetDocumentParams {
-    documentType: DocumentType
+    documentType: string
     documentId: string
     user: UserTokenData
     headers: UserActionHeaders
@@ -207,7 +207,12 @@ export interface AddDocumentParams {
     userIdentifier: string
     mobileUid: string
     data: Record<string, Record<string, never>>
-    documentTypes?: DocumentType[]
+    documentTypes?: string[]
+}
+
+export interface IsDocumentForceUpdateParams {
+    documentType: string
+    documentsExpiration: DocumentsExpirationModel | null
 }
 
 export interface DeleteDocumentParams {
@@ -216,8 +221,9 @@ export interface DeleteDocumentParams {
     force: boolean | undefined
 }
 
-export interface GetDocumentResponse extends Partial<Record<DocumentTypeCamelCase, DocumentResponse<DocumentInstance>>> {
+export interface GetDocumentResponse {
     processCode: number
+    [key: string]: DocumentResponse<DocumentInstance> | number
 }
 
 export type AddDocumentStrategyResponse = [number | undefined, undefined | number]
@@ -228,15 +234,25 @@ export type GetDocumentStrategy = (params: GetDocumentParams) => Promise<GetDocu
 
 export type GetIdentityDocumentStrategy = (user: AppUser) => Promise<IdentityDocument | undefined>
 
+export type IsDocumentForceUpdate = (params: IsDocumentForceUpdateParams) => boolean
+
 export type AddDocumentStrategy = (params: AddDocumentParams) => Promise<AddDocumentStrategyResponse>
 
 export type DeleteDocumentStrategy = (params: DeleteDocumentParams) => Promise<DeleteDocumentStrategyResponse>
 
 export type EnrichDocumentsStrategy = (documents: CommonDocument[], enrichParams: EnrichDocumentsStrategyParams) => Promise<void>
 
+export type GetSharingRenderDataByDocumentTypeStrategy = (
+    data: unknown,
+    requester: string,
+    requestDateTime: string,
+    requestIdentifier: string,
+    documentType?: string,
+) => GenericObject
+
 export type SyncDocumentDataStrategy = (
     userIdentifier: string,
-    documentType: DocumentType,
+    documentType: string,
     documents: CommonDocument[],
     decryptedDataFromStorage: DocumentDecryptedData[],
     unavailableDocuments?: UnavailableDocument[],
@@ -257,7 +273,7 @@ export interface GetDocumentsRequest {
 }
 
 export interface DocumentWithETagRequest {
-    type: DocumentTypeCamelCase
+    type: string
     eTag?: string
 }
 
@@ -267,63 +283,125 @@ export interface DocumentWithETagResponse {
     eTag: string
 }
 
-export type DocumentsResponse = Partial<Record<DocumentTypeCamelCase, DocumentWithETagResponse>>
+export type DocumentsResponse = Partial<Record<string, DocumentWithETagResponse>>
 
-export interface DocumentService {
-    addDocument?(params: AddDocumentParams): Promise<AddDocumentStrategyResponse | undefined>
-    addDocumentType?: string
-    addDocumentTypeToDocumentTypes?: Record<string, DocumentType[]>
-    assertDocumentIsValid?(params: AssertStrategyParams): Promise<void> | never
-    deleteDocument?(props: DeleteDocumentParams): Promise<DeleteDocumentStrategyResponse>
-    deleteDocumentProcessCodeByType?: Partial<Record<DocumentType, [number, number]>>
-    documentTypes: DocumentType[]
-    documentTypeToDocumentTypeResponse: Partial<Record<DocumentType, string>>
-    documentTypeToIdentityDocumentTypeResponse?: Partial<Record<DocumentType, string>>
-    documentTypeResponsesToEnrich?: string[]
-    documentTypeResponseToDocumentType: Partial<Record<string, DocumentType>>
-    documentFilters?: DocumentType[]
-    documentFiltersBySessionType?: Partial<Record<SessionType, DocumentType[]>>
-    documentFiltersBySessionTypeAndFeature?: Partial<Record<SessionType, Partial<Record<ProfileFeature, DocumentType[]>>>>
-    documentsToGetFeaturePoints?: DocumentType[]
-    enrichDocumentsStrategiesByDocumentTypeResponse?: Record<string, EnrichDocumentsStrategy>
-    getDocument?(params: GetDocumentParams): Promise<GetDocumentResponse>
-    getDocuments?(params: GetDocumentsParams): Promise<GetDocumentsResult>
-    getDocumentsToProcess?(params: GetDocumentsParams): Promise<GetDocumentsResult>
-    getDocumentType?: DocumentType
-    getIdentityDocumentStrategyBySessionType?: Partial<Record<SessionType, GetIdentityDocumentStrategy>>
-    getIdentityDocumentByDocumentType?: Partial<Record<DocumentType, GetIdentityDocumentStrategy>>
-    identityDocumentTypes?: DocumentType[]
-    manualDocumentNames?: string[]
-    showInManualList?(userIdentifier: string, addBtnCode: string): Promise<boolean>
-    syncDocumentDataStrategies?: Partial<Record<DocumentType, SyncDocumentDataStrategy>>
-    validDocStatusesByDocumentType?: Partial<Record<DocumentType, DocStatus[]>>
-    documentTypeDefinerByQrCodeStrategies?: DocumentTypeDefinerByQrCodeStrategy[]
-    verifyDocument?(response: VerifyOtpResponse, params?: DocumentVerifyParams): Promise<CommonDocument>
-    defineDocumentTypeByQrCode?(qrCode: string): DocumentType | undefined
-    verifyDocumentByData?<T>(qrCode: string, headers: ActHeaders, designSystem: boolean): Promise<VerificationResponse<T>>
-    downloadDocument?(data: DocumentDownloadParams, user?: UserTokenData): Promise<DocumentDownloadResponse>
+export interface SkipSaveToUserProfileConditions {
+    env: Env
+    docStatuses: DocStatus[]
 }
 
+export interface AddDocumentFeature {
+    addDocumentType: string
+    addDocumentTypeToDocumentTypes?: Record<string, string[]>
+    addDocument(params: AddDocumentParams): Promise<AddDocumentStrategyResponse | undefined>
+}
+
+export interface AddListDocumentFeature {
+    manualDocumentNames: string[]
+    showInManualList?(user: AppUser, addBtnCode: string): Promise<boolean>
+}
+
+export interface HideDocumentFeature {
+    deleteDocumentProcessCodeByType?: Partial<Record<string, [number, number]>>
+    deleteDocument?(props: DeleteDocumentParams): Promise<DeleteDocumentStrategyResponse>
+}
+
+export interface IdentityDocumentFeature {
+    identityDocumentTypes: string[]
+    getIdentityDocumentByDocumentType?: Partial<Record<string, GetIdentityDocumentStrategy>>
+    documentTypeToIdentityDocumentTypeResponse?: Partial<Record<string, string>>
+    getIdentityDocumentStrategyBySessionType?: Partial<Record<SessionType, GetIdentityDocumentStrategy>>
+}
+
+export interface EnrichDocumentFeature {
+    documentTypeResponsesToEnrich?: string[]
+    enrichDocumentsStrategiesByDocumentTypeResponse?: Record<string, EnrichDocumentsStrategy>
+}
+
+export interface SessionFilterDocumentFeature {
+    sessionType?: SessionType
+    documentFiltersBySessionType?: Partial<Record<SessionType, string[]>>
+    documentFiltersBySessionTypeAndFeature?: Partial<Record<SessionType, Partial<Record<ProfileFeature, string[]>>>>
+}
+
+export interface FeaturePointsDocumentFeature {
+    documentsToGetFeaturePoints: string[]
+}
+
+export interface SyncDataDocumentFeature {
+    syncDocumentDataStrategies: Record<string, SyncDocumentDataStrategy>
+}
+
+export interface ForceUpdateDocumentFeature {
+    isDocumentForceUpdate(params: IsDocumentForceUpdateParams): boolean
+}
+
+export interface BaseDocumentService<T extends string, TCamel extends string> {
+    documentTypes: T[]
+    documentTypeToName: Record<T, string>
+    documentTypeToDocumentTypeResponse: Record<T, TCamel>
+    documentTypeResponseToDocumentType: Record<TCamel, T>
+    defaultSortOrder: Record<T, number>
+    documentFilters?: T[]
+    getDocuments(params: GetDocumentsParams<T>): Promise<GetDocumentsResult>
+}
+
+export interface DocumentService<T extends string, TCamel extends string> extends BaseDocumentService<T, TCamel> {
+    validDocStatusesByDocumentType?: Partial<Record<T, DocStatus[]>>
+    skipSaveToUserProfileConditionsByDocumentType?: Record<T, SkipSaveToUserProfileConditions>
+    documentTypeToGrpcDocumentType?: Partial<Record<T, TCamel>>
+    /** @deprecated use add document instead */
+    getDocumentType?: string
+    assertDocumentIsValid(params: AssertStrategyParams): Promise<void> | never
+    verifyDocument(response: VerifyOtpResponse, params?: DocumentVerifyParams): Promise<CommonDocument>
+    getDocumentsToProcess?(params: GetDocumentsParams<T>): Promise<GetDocumentsResult>
+    verifyDocumentByData?<T>(qrCode: string, headers: ActHeaders, designSystem: boolean): Promise<VerificationResponse<T>>
+    defineDocumentTypeByQrCode?(qrCode: string): string | undefined
+    downloadDocument?(data: DocumentDownloadParams<T>, user?: UserTokenData): Promise<DocumentDownloadResponse>
+    getShareSettings?(documentType: string): ShareSettings
+    getSharingRenderData?(
+        data: unknown,
+        requester: string,
+        requestDateTime: string,
+        requestIdentifier: string,
+        documentType?: T,
+    ): GenericObject
+    /** @deprecated use add document instead */
+    getDocument?(params: GetDocumentParams): Promise<GetDocumentResponse>
+}
+
+export type AnyDocumentService<T extends string = string, TCamel extends string = string> = DocumentService<T, TCamel> &
+    ForceUpdateDocumentFeature &
+    SyncDataDocumentFeature &
+    FeaturePointsDocumentFeature &
+    SessionFilterDocumentFeature &
+    EnrichDocumentFeature &
+    IdentityDocumentFeature &
+    HideDocumentFeature &
+    AddListDocumentFeature &
+    AddDocumentFeature
+
 export interface DocumentExpirationService {
-    documentsWithoutExpirationPerUser?: DocumentType[]
+    documentsToSkipExpiration?: string[]
+    documentsWithoutExpirationPerUser?: string[]
 }
 
 export interface DocumentAnalyticsService {
-    documentTypeToGenerateOtpAnalyticsAction?: Partial<Record<DocumentType, string>>
-    documentTypeToGetDocumentAnalyticsAction?: Partial<Record<DocumentType, string>>
+    documentTypeToGenerateOtpAnalyticsAction?: Partial<Record<string, string>>
+    documentTypeToGetDocumentAnalyticsAction?: Partial<Record<string, string>>
     actionResultByStatusCode?: Partial<Record<DocumentStatusCode, AnalyticsActionResult>>
 }
 
 export interface DocumentAttributesService {
-    covers?: Partial<Record<DocumentType, Partial<Record<DocStatus, DocumentCover>>>>
-    documentTypesForPrefixedTrident?: Partial<Record<PlatformType, DocumentType[]>>
-    tickers?: Partial<Record<DocumentType, Partial<Record<DocumentTickerCode, Partial<Record<Localization, TickerAtm>>>>>>
-    tickersV1?: Record<Localization, Partial<Record<DocumentType, Partial<Record<DocumentTickerCode, DocumentTicker>>>>>
+    covers?: Partial<Record<string, Partial<Record<DocStatus, DocumentCover>>>>
+    documentTypesForPrefixedTrident?: Partial<Record<PlatformType, string[]>>
+    tickers?: Partial<Record<string, Partial<Record<DocumentTickerCode, Partial<Record<Localization, TickerAtm>>>>>>
+    tickersV1?: Record<Localization, Partial<Record<string, Partial<Record<DocumentTickerCode, DocumentTicker>>>>>
 }
 
-export interface DocumentDownloadParams {
+export interface DocumentDownloadParams<T> {
     documentId: string
-    documentType: DocumentType
+    documentType: T
 }
 
 export type DocumentDownloadResponse =
@@ -336,4 +414,6 @@ export type DocumentDownloadResponse =
       }
     | GetDocumentResponse
 
-export type DownloadStrategy = (data: DocumentDownloadParams, user?: UserTokenData) => Promise<DocumentDownloadResponse>
+export type DownloadStrategy<T> = (data: DocumentDownloadParams<T>, user?: UserTokenData) => Promise<DocumentDownloadResponse>
+
+export type DocumentsDefaultOrder = Partial<Record<SessionType, { items: string[] }>>

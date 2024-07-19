@@ -1,13 +1,18 @@
 syntax = "proto3";
 
 import "google/api/annotations.proto";
-import "google/api/http.proto";
 import "google/protobuf/empty.proto";
 import "google/protobuf/timestamp.proto";
 
 import "document.proto";
 import "documents/nameValue.proto";
 import "documents/documentData.proto";
+import "token/gender.proto";
+
+import "documents/birthCertificate.proto";
+import "documents/driverLicense.proto";
+import "documents/vehicleLicense.proto";
+import "documents/vehicleInsurancePolicy.proto";
 
 package ua.gov.diia.documentsservice;
 option java_multiple_files = true;
@@ -19,16 +24,45 @@ service DocumentsService {
       returns (GetIdentityDocumentResponse);
   rpc getPassportToProcess(GetPassportToProcessRequest)
       returns (GetPassportToProcessResponse);
+  rpc GetRelationshipActRecordsToProcess(GetRelationshipActRecordsToProcessReq)
+      returns (GetRelationshipActRecordsToProcessRes);
   rpc getInternalPassportWithRegistration(
       GetInternalPassportWithRegistrationRequest)
       returns (GetInternalPassportWithRegistrationResponse);
 
   rpc ShareDocument(ua.gov.diia.document.ShareDocumentReq)
-      returns (ua.gov.diia.document.ShareDocumentRes) {
+      returns (ua.gov.diia.document.ShareDocumentResV1) {
     option (google.api.http) = {
       get : "/api/v1/documents/{documentType}/{documentId}/share"
     };
   }
+  rpc getDocumentsToProcess(GetDocumentsToProcessRequest)
+      returns (GetDocumentsToProcessResponse);
+
+  rpc getRegistration(google.protobuf.Empty) returns (GetRegistrationRes);
+
+  rpc GetSortedByDefaultDocumentTypes(google.protobuf.Empty)
+      returns (GetSortedByDefaultDocumentTypesRes);
+
+  rpc GetDocumentNames(GetDocumentNamesRequest)
+      returns (GetDocumentNamesResponse);
+  rpc GetDocumentTypes(google.protobuf.Empty)
+      returns (GetDocumentTypesResponse);
+}
+
+message GetDocumentNamesRequest { repeated string documentTypes = 1; }
+
+message GetDocumentNamesResponse { map<string, string> documentTypeToName = 1; }
+
+message GetDocumentTypesResponse { repeated string documentTypes = 1; }
+
+message GetSortedByDefaultDocumentTypesRes {
+  message DocumentTypesList { repeated string items = 1; }
+  map<string, DocumentTypesList> sortedDocumentTypes = 1;
+}
+
+message GetRegistrationRes {
+  optional PassportRegistrationInfo registration = 1;
 }
 
 message GetPassportToProcessRequest { optional bool handlePhoto = 1; }
@@ -52,6 +86,84 @@ message GetInternalPassportWithRegistrationRequest {
 message GetInternalPassportWithRegistrationResponse {
   PassportRegistrationInfo registration = 1;
   optional PassportInfo passport = 2;
+}
+
+message GetDocumentsToProcessRequest {
+  repeated string documentTypes = 1;
+  optional bool ignoreCache = 2;
+}
+
+message GetDocumentsToProcessResponse {
+  message GrpcInternalPassport {
+    repeated InternalPassport data = 1;
+    int32 status = 2;
+  }
+
+  message GrpcForeignPassport {
+    repeated ForeignPassport data = 1;
+    int32 status = 2;
+  }
+
+  message GrpcMarriageActRecord {
+    repeated RelationshipActRecord data = 1;
+    int32 status = 2;
+  }
+
+  message GrpcDivorceActRecord {
+    repeated RelationshipActRecord data = 1;
+    int32 status = 2;
+  }
+
+  message GrpcBirthCertificate {
+    repeated ua.gov.diia.document.BirthCertificate data = 1;
+    int32 status = 2;
+  }
+
+  message GrpcDriverLicense {
+    repeated ua.gov.diia.document.DriverLicense data = 1;
+    int32 status = 2;
+  }
+
+  message GrpcVehicleLicense {
+    repeated ua.gov.diia.document.VehicleLicense data = 1;
+    int32 status = 2;
+  }
+
+  message GrpcVehicleInsurancePolicy {
+    repeated ua.gov.diia.document.VehicleInsurancePolicy data = 1;
+    int32 status = 2;
+  }
+
+  // TODO: move all documents to document.proto
+
+  optional GrpcInternalPassport internalPassport = 1;
+  optional GrpcForeignPassport foreignPassport = 2;
+  optional GrpcMarriageActRecord marriageActRecord = 3;
+  optional GrpcDivorceActRecord divorceActRecord = 4;
+  optional GrpcBirthCertificate birthCertificate = 5;
+  optional GrpcDriverLicense driverLicense = 6;
+  optional GrpcVehicleLicense vehicleLicense = 7;
+  optional GrpcVehicleInsurancePolicy vehicleInsurancePolicy = 8;
+}
+
+message GetRelationshipActRecordsToProcessReq {
+  string itn = 1;
+  repeated RelationshipActRecordSubtype subtypes = 2;
+}
+
+message GetRelationshipActRecordsToProcessRes {
+  message GrpcMarriageActRecord {
+    repeated RelationshipActRecord data = 1;
+    optional int32 errorCode = 2;
+  }
+
+  message GrpcDivorceActRecord {
+    repeated RelationshipActRecord data = 1;
+    optional int32 errorCode = 2;
+  }
+
+  GrpcMarriageActRecord marriageActRecord = 1;
+  GrpcDivorceActRecord divorceActRecord = 2;
 }
 
 message PassportRegistrationInfo {
@@ -135,11 +247,6 @@ message TaxpayerCardInDocument {
   string statusDescription = 4;
 }
 
-message DocumentTicker {
-  string type = 1;
-  string text = 2;
-}
-
 enum PassportType {
   ID = 0;
   P = 1;
@@ -181,7 +288,7 @@ message InternalPassport {
   optional ua.gov.diia.types.documents.OwnerType ownerType = 4;
   optional google.protobuf.Timestamp registrationDate = 5;
   optional string expirationDate = 6;
-  optional DocumentTicker tickerOptions = 7;
+  optional ua.gov.diia.document.DocumentTicker tickerOptions = 7;
   optional string fullNameHash = 8;
   // BasePassportInstance
   string id = 9;
@@ -242,7 +349,7 @@ message ForeignPassportInstanceDetails {
   ua.gov.diia.types.documents.NameValue birthPlace = 18;
   ua.gov.diia.types.documents.NameValue residenceRegistrationPlace = 19;
   ua.gov.diia.types.documents.NameValue registrationDate = 20;
-  optional DocumentTicker tickerOptions = 21;
+  optional ua.gov.diia.document.DocumentTicker tickerOptions = 21;
 }
 
 message ForeignPassport {
@@ -253,7 +360,7 @@ message ForeignPassport {
   optional ua.gov.diia.types.documents.OwnerType ownerType = 4;
   optional google.protobuf.Timestamp registrationDate = 5;
   optional string expirationDate = 6;
-  optional DocumentTicker tickerOptions = 7;
+  optional ua.gov.diia.document.DocumentTicker tickerOptions = 7;
   optional string fullNameHash = 8;
   // BasePassportInstance
   string id = 9;
@@ -296,9 +403,9 @@ message EResidentPassport {
   string docNumber = 2;
   optional string docSubtype = 3;
   optional ua.gov.diia.types.documents.OwnerType ownerType = 4;
-  optional google.protobuf.Timestamp registrationDate = 5;
+  optional string registrationDate = 5; // Date ISO
   optional string expirationDate = 6;
-  optional DocumentTicker tickerOptions = 7;
+  optional ua.gov.diia.document.DocumentTicker tickerOptions = 7;
   optional string fullNameHash = 8;
   // BasePassportInstance
   string id = 9;
@@ -351,4 +458,92 @@ message ResidencePermitRegistrationInfo {
 message ResidencePermitNationality {
   string codeAlfa3 = 1;
   string name = 2;
+}
+
+message ActRecordCertificate {
+  optional int32 status = 1;
+  optional string serie = 2;
+  optional string serieOriginal = 3;
+  optional string number = 4;
+  optional string serieNumber = 5;
+  optional string department = 6;
+  optional string issueDate = 7; // Date ISO
+}
+
+enum RelationshipActRecordSubtype {
+  marriage = 0;
+  divorce = 1;
+}
+
+// MarriageActRecord
+message RelationshipActRecord {
+  message PartnerDetails {
+    message AddressDetails {
+      optional string state = 1;
+      optional string region = 2;
+      optional string district = 3;
+      optional string localityType = 4;
+
+      optional string locality = 5;
+      optional string street = 6;
+      optional string house = 7;
+      optional string buildingPart = 8;
+      optional string apartment = 9;
+      optional string buildingPartType = 10;
+    }
+
+    optional string familyStatus = 1;
+    optional int32 marriageNumber = 2;
+    optional string oldLastName = 3;
+    optional string lastName = 4;
+    optional string firstName = 5;
+    optional string middleName = 6;
+    optional string rnokpp = 7;
+    optional string citizenshipAnother = 8;
+    optional string militaryService = 9;
+    optional string docName = 10;
+    optional string seriesNumber = 11;
+    optional string docOrgName = 12;
+    optional string birthState = 13;
+    optional string birthRegion = 14;
+    optional string birthDistrict = 15;
+    optional string birthLocalityType = 16;
+    optional string birthLocality = 17;
+    ua.gov.diia.types.token.Gender gender = 18;
+    optional string birthDate = 19; // Date ISO
+    optional string docDate = 20;   // Date ISO
+    optional string doctype = 21;
+    optional string citizenship = 22;
+    AddressDetails addressDetails = 23;
+    optional string docType = 24;
+  }
+
+  optional string reasonDivorce = 1;
+  optional string rcCourtDecision = 2;
+  optional string courtName = 3;
+  PartnerDetails partnerFirst = 4;
+  PartnerDetails partnerSecond = 5;
+  // BaseActRecord
+  optional string arRegDate = 6; // Date ISO
+  string opDate = 7;             // Date ISO
+  string arOpName = 8;
+  string name = 9;
+  optional int32 number = 10;
+  optional string date = 11; // Date ISO
+  optional string registrationPlace = 12;
+  int32 isRestore = 13;
+  optional int32 arVerificationSt = 14;
+  optional string numberLink = 15;
+  optional string dateLink = 16;
+  optional string composeOrgLink = 17;
+  repeated ActRecordCertificate certificates = 18;
+  // DocumentCommon
+  string id = 19;
+  optional string issueDate = 20; // Date ISO
+  int32 docStatus = 21;
+  string docNumber = 22;
+  RelationshipActRecordSubtype subtype = 23;
+  optional ua.gov.diia.types.documents.OwnerType ownerType = 24;
+  optional string expirationDate = 25; // Date ISO
+  optional string fullNameHash = 26;
 }

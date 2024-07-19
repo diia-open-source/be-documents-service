@@ -1,10 +1,10 @@
 import { AppAction } from '@diia-inhouse/diia-app'
 
-import { ActionVersion, DocumentType, SessionType } from '@diia-inhouse/types'
+import { ActionVersion, SessionType } from '@diia-inhouse/types'
 import { ValidationSchema } from '@diia-inhouse/validators'
 
 import { CustomActionArguments } from '@src/documents/taxpayerCard/interfaces/action/v1/shareTaxpayerCard'
-import { TaxpayerCardAssertParams } from '@src/documents/taxpayerCard/interfaces/services/documentVerification'
+import { DocumentType } from '@src/documents/taxpayerCard/interfaces/services'
 
 import DocumentVerificationService from '@services/documentVerification'
 
@@ -30,15 +30,11 @@ export default class ShareTaxpayerCardAction implements AppAction {
             headers,
         } = args
 
-        const documentAssertParams: TaxpayerCardAssertParams = { user }
-
         return await this.documentVerificationService.generateOtpLink({
             documentType: DocumentType.TaxpayerCard,
             documentId,
             headers,
-            userIdentifier: user.identifier,
-            documentAssertParams,
-            generateBarcode: true,
+            user,
         })
     }
 }

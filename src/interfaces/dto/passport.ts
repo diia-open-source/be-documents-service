@@ -1,4 +1,4 @@
-import { PassportByInnDocumentType } from '@src/generated'
+import { PassportByInnDocumentType, PassportType } from '@src/generated'
 
 export enum PassportGenderEN {
     F = 'F',
@@ -8,11 +8,6 @@ export enum PassportGenderEN {
 export enum PassportGenderUA {
     F = 'Ж',
     M = 'Ч',
-}
-
-export enum PassportType {
-    ID = 'ID',
-    P = 'P',
 }
 
 export enum CountryCode {

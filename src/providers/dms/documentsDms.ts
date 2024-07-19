@@ -1,4 +1,4 @@
-import { ExternalCommunicator, ExternalEvent } from '@diia-inhouse/diia-queue'
+import { ExternalCommunicator } from '@diia-inhouse/diia-queue'
 import { NotFoundError } from '@diia-inhouse/errors'
 import { Logger } from '@diia-inhouse/types'
 
@@ -8,6 +8,7 @@ import { RegistryPassportsByInn } from '@interfaces/dto'
 import { PassportsByInnRequest, PassportsByInnResponse } from '@interfaces/externalEventListeners/repoDocumentPassportsByInn'
 import { DocumentsDmsServiceProvider } from '@interfaces/providers'
 import { PassportByInn, PassportByInnRequester } from '@interfaces/providers/dms'
+import { ExternalEvent } from '@interfaces/queue'
 
 export default class DocumentsDmsProvider implements DocumentsDmsServiceProvider {
     constructor(

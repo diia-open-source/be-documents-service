@@ -1,4 +1,4 @@
-import { AppAction } from '@diia-inhouse/diia-app'
+import { GrpcAppAction } from '@diia-inhouse/diia-app'
 
 import { ActionVersion, SessionType } from '@diia-inhouse/types'
 
@@ -6,7 +6,7 @@ import PassportService from '@services/passport'
 
 import { ActionResult, CustomActionArguments } from '@interfaces/actions/v1/getRegistration'
 
-export default class GetRegistrationAction implements AppAction {
+export default class GetRegistrationAction implements GrpcAppAction {
     constructor(private readonly passportService: PassportService) {}
 
     readonly sessionType: SessionType = SessionType.User

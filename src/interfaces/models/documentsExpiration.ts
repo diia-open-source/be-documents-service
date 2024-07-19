@@ -1,6 +1,5 @@
-import { Document } from 'mongoose'
-
-import { DocStatus, DocumentType, OwnerType } from '@diia-inhouse/types'
+import { Document } from '@diia-inhouse/db'
+import { DocStatus, OwnerType } from '@diia-inhouse/types'
 
 export interface DocumentIdStatusByOwnerType {
     value: DocStatus
@@ -17,7 +16,7 @@ export interface DocumentIdsExpiration {
     eTag?: string
 }
 
-type Expirations = { [key in DocumentType]?: DocumentIdsExpiration }
+type Expirations = Record<string, DocumentIdsExpiration | unknown>
 
 export interface DocumentsExpiration extends Expirations {
     mobileUid: string

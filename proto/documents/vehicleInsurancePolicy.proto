@@ -1,0 +1,39 @@
+syntax = "proto3";
+
+import "google/protobuf/timestamp.proto";
+
+import "documents/documentData.proto";
+
+import "document.proto";
+
+package ua.gov.diia.document;
+option java_multiple_files = true;
+option java_package = "ua.gov.diia.document";
+
+enum PolicyStatus {
+  Active = 0;
+}
+
+message VehicleInsurancePolicy {
+  string id = 1;
+  string docNumber = 2;
+  string licensePlate = 3;
+  string vin = 4;
+  optional string vehicleLicenseId = 5;
+  string serialNumber = 6;
+  PolicyStatus status = 7;
+  string expirationDate = 8;
+  string name = 9;
+  string address = 10;
+  string phone = 11;
+  string email = 12;
+  string website = 13;
+  string validOn = 14;
+  // DocumentMetaData
+  int32 docStatus = 15;
+  optional string docSubtype = 16;
+  optional ua.gov.diia.types.documents.OwnerType ownerType = 17;
+  optional google.protobuf.Timestamp registrationDate = 18;
+  optional ua.gov.diia.document.DocumentTicker tickerOptions = 19;
+  optional string fullNameHash = 20;
+}

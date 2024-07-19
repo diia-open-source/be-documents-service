@@ -1,7 +1,6 @@
-import { randomUUID } from 'crypto'
+import { randomUUID } from 'node:crypto'
 
 import TestKit, { mockInstance } from '@diia-inhouse/test'
-import { DocumentType } from '@diia-inhouse/types'
 
 import DeleteDocumentAction from '@actions/v1/deleteDocument'
 
@@ -15,7 +14,7 @@ describe(`Action ${DeleteDocumentAction.name}`, () => {
     it('should return true and process code if deleted document', async () => {
         const { session, headers } = testKit.session.getUserActionArguments()
         const args = {
-            params: { documentType: <DocumentType>'document-type', documentId: randomUUID(), force: true },
+            params: { documentType: 'document-type', documentId: randomUUID(), force: true },
             session,
             headers,
         }

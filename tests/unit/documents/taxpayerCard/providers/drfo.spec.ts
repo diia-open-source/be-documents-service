@@ -1,10 +1,11 @@
 import DiiaLogger from '@diia-inhouse/diia-logger'
 import { ExternalCommunicator } from '@diia-inhouse/diia-queue'
 import TestKit, { mockInstance } from '@diia-inhouse/test'
-import { DocStatus, DocumentType } from '@diia-inhouse/types'
+import { DocStatus } from '@diia-inhouse/types'
 
 import TaxpayerCardDataMapper from '@src/documents/taxpayerCard/dataMappers/document'
 import { PluginConfig } from '@src/documents/taxpayerCard/interfaces/config'
+import { DocumentType, TaxpayerCard } from '@src/documents/taxpayerCard/interfaces/services'
 import DocumentsDrfoProvider from '@src/documents/taxpayerCard/providers/drfo'
 
 import { AppConfig } from '@interfaces/config'
@@ -29,7 +30,7 @@ describe('DocumentsDrfoProvider', () => {
     const testKit = new TestKit()
     const { user } = testKit.session.getUserSession()
 
-    const card = testKit.docs.getTaxpayerCard()
+    const card = <TaxpayerCard>testKit.docs.generateDocument(DocumentType.TaxpayerCard)
 
     describe('method: `getTaxpayerCard`', () => {
         it.each([

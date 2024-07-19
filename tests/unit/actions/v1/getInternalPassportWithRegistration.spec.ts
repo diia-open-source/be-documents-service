@@ -54,6 +54,7 @@ describe(`Action ${GetInternalPassportWithRegistrationAction.name}`, () => {
         const passportWithRegistration = getPassportWithRegistration()
 
         jest.spyOn(passportService, 'getPassportByInn').mockResolvedValueOnce(passportWithRegistration)
+        // eslint-disable-next-line unicorn/no-useless-undefined
         jest.spyOn(passportService, 'getRegistration').mockResolvedValueOnce(undefined)
 
         expect(await action.handler(args)).toMatchObject({

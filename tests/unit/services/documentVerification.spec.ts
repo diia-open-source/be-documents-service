@@ -1,4 +1,4 @@
-import { randomUUID } from 'crypto'
+import { randomUUID } from 'node:crypto'
 
 const uuidV4Stub = jest.fn()
 
@@ -9,7 +9,7 @@ import { AuthService } from '@diia-inhouse/crypto'
 import Logger from '@diia-inhouse/diia-logger'
 import { BadRequestError, DocumentNotFoundError, NotFoundError } from '@diia-inhouse/errors'
 import TestKit, { mockInstance } from '@diia-inhouse/test'
-import { DocStatus, DocumentType, Localization, OwnerType } from '@diia-inhouse/types'
+import { DocStatus, Localization, OwnerType } from '@diia-inhouse/types'
 
 import AnalyticsService from '@services/analytics'
 import DocumentsExpirationService from '@services/documentsExpiration'
@@ -19,12 +19,12 @@ import PassportService from '@services/passport'
 
 import DocumentVerificationDataMapper from '@dataMappers/documentVerificationDataMapper'
 
-import PluginDepsCollectionMock, { getDocumentService } from '@mocks/stubs/documentDepsCollection'
+import { getDocumentService } from '@mocks/stubs/documentDepsCollection'
 
 import { AppConfig } from '@interfaces/config'
 import { DocumentVerificationOtpModel } from '@interfaces/models/documentVerificationOtp'
 import { CommonDocument } from '@interfaces/services/documents'
-import { AssertParams } from '@interfaces/services/documentVerification'
+import { PassportDocumentType } from '@interfaces/services/passport'
 
 describe(`Service ${DocumentVerificationService.name}`, () => {
     const now = new Date()
@@ -34,9 +34,13 @@ describe(`Service ${DocumentVerificationService.name}`, () => {
     const documentsExpirationService = mockInstance(DocumentsExpirationService)
     const documentVerificationOtpService = mockInstance(DocumentVerificationOtpService)
     const mockDocumentService = getDocumentService()
-    const documentServices = new PluginDepsCollectionMock([mockDocumentService])
     const passportService = mockInstance(PassportService)
-    const documentVerificationDataMapper = mockInstance(DocumentVerificationDataMapper)
+    const documentVerificationDataMapper = mockInstance(DocumentVerificationDataMapper, {
+        timerTextByLocalization: {
+            [Localization.UA]: 'Код діятиме ще',
+            [Localization.ENG]: 'The code will expire in',
+        },
+    })
 
     const config = <AppConfig>{
         app: {
@@ -48,7 +52,7 @@ describe(`Service ${DocumentVerificationService.name}`, () => {
 
     const service = new DocumentVerificationService(
         analyticsService,
-        documentServices,
+        [mockDocumentService],
         documentsExpirationService,
         documentVerificationOtpService,
         passportService,
@@ -61,6 +65,8 @@ describe(`Service ${DocumentVerificationService.name}`, () => {
     const { user } = testKit.session.getUserSession()
     const headers = testKit.session.getHeaders()
 
+    service.onRegistrationsFinished()
+
     beforeEach(() => {
         jest.useFakeTimers({ now })
     })
@@ -72,14 +78,10 @@ describe(`Service ${DocumentVerificationService.name}`, () => {
     describe(`method: ${service.generateOtpLink.name}`, () => {
         it('should throw BadRequestError if document expiration record not found', async () => {
             const shareLinkParams = {
-                documentType: <DocumentType>'document-type',
+                documentType: 'document-type',
                 documentId: 'documentId',
                 headers,
-                userIdentifier: user.identifier,
-                documentAssertParams: <AssertParams>{
-                    itn: user.itn,
-                },
-                generateBarcode: false,
+                user,
                 localization: Localization.UA,
             }
 
@@ -109,15 +111,10 @@ describe(`Service ${DocumentVerificationService.name}`, () => {
 
         it('should throw DocumentNotFoundError if there is no document with given id', async () => {
             const shareLinkParams = {
-                documentType: <DocumentType>'document-type',
+                documentType: 'document-type',
                 documentId: 'documentId',
                 headers,
-                userIdentifier: user.identifier,
-                documentAssertParams: <AssertParams>{
-                    itn: user.itn,
-                    user,
-                },
-                generateBarcode: false,
+                user,
                 localization: Localization.UA,
             }
 
@@ -145,15 +142,10 @@ describe(`Service ${DocumentVerificationService.name}`, () => {
 
         it('should throw BadRequestError if assert strategy not defined', async () => {
             const shareLinkParams = {
-                documentType: <DocumentType>'wrong-doc-type',
+                documentType: 'wrong-doc-type',
                 documentId: 'documentId',
                 headers,
-                userIdentifier: user.identifier,
-                documentAssertParams: <AssertParams>{
-                    itn: user.itn,
-                    user,
-                },
-                generateBarcode: false,
+                user,
                 localization: Localization.UA,
             }
 
@@ -179,12 +171,10 @@ describe(`Service ${DocumentVerificationService.name}`, () => {
 
         it('should return generated link with document doc type', async () => {
             const shareLinkParams = {
-                documentType: <DocumentType>'document-type',
+                documentType: 'document-type',
                 documentId: 'documentId',
                 headers,
-                userIdentifier: user.identifier,
-                documentAssertParams: <AssertParams>{ itn: user.itn },
-                generateBarcode: false,
+                user,
                 localization: Localization.UA,
             }
 
@@ -231,21 +221,16 @@ describe(`Service ${DocumentVerificationService.name}`, () => {
                 documentId: shareLinkParams.documentId,
                 documentType: shareLinkParams.documentType,
                 ownerType: OwnerType.owner,
-                documentAssertParams: { itn: user.itn },
+                documentAssertParams: { user, features: undefined, serieNumber: undefined },
             })
         })
 
         it('should return generated link with internal passport doc type', async () => {
             const shareLinkParams = {
-                documentType: DocumentType.InternalPassport,
+                documentType: PassportDocumentType.InternalPassport,
                 documentId: 'documentId',
                 headers,
-                userIdentifier: user.identifier,
-                documentAssertParams: <AssertParams>{
-                    itn: user.itn,
-                    user,
-                },
-                generateBarcode: false,
+                user,
                 localization: Localization.UA,
             }
 
@@ -280,7 +265,7 @@ describe(`Service ${DocumentVerificationService.name}`, () => {
         it('should throw NotFoundError if verification otp not found', async () => {
             const params = {
                 otp: 'otp',
-                documentType: <DocumentType>'document-type',
+                documentType: 'document-type',
                 token: 'token',
             }
 
@@ -294,7 +279,7 @@ describe(`Service ${DocumentVerificationService.name}`, () => {
         it('should throw Error if verification strategy not defined', async () => {
             const params = {
                 otp: 'otp',
-                documentType: <DocumentType>'wrong-type',
+                documentType: 'wrong-type',
                 token: 'token',
             }
 
@@ -322,7 +307,7 @@ describe(`Service ${DocumentVerificationService.name}`, () => {
         })
 
         it('should return document', async () => {
-            const documentType = <DocumentType>'document-type'
+            const documentType = 'document-type'
             const params = {
                 otp: 'otp',
                 documentType,
@@ -355,7 +340,7 @@ describe(`Service ${DocumentVerificationService.name}`, () => {
 
     describe(`method: ${service.verifyDocumentByBarcode.name}`, () => {
         it('should throw BadRequestError if verification strategy not defined', async () => {
-            const documentType = <DocumentType>'wrong-type'
+            const documentType = 'wrong-type'
 
             await expect(service.verifyDocumentByBarcode(documentType, 'code')).rejects.toThrow(
                 new BadRequestError(`Verify strategy for ${documentType} is not defined`),
@@ -364,7 +349,7 @@ describe(`Service ${DocumentVerificationService.name}`, () => {
         })
 
         it('should return document by barcode', async () => {
-            const documentType = <DocumentType>'document-type'
+            const documentType = 'document-type'
             const verifyOTPResponse = {
                 requestor: user,
                 docId: 'docId',
@@ -388,14 +373,14 @@ describe(`Service ${DocumentVerificationService.name}`, () => {
         it('should throw NotFoundError if verification not found by barcode', async () => {
             jest.spyOn(documentVerificationOtpService, 'findByKey').mockResolvedValueOnce(null)
 
-            await expect(service.getDocumentByBarcode(<DocumentType>'document-type', 'code')).rejects.toThrow(
+            await expect(service.getDocumentByBarcode('document-type', 'code')).rejects.toThrow(
                 new NotFoundError(`Verification not found by barcode: code`),
             )
             expect(documentVerificationOtpService.findByKey).toHaveBeenCalledWith({ barcode: 'code' })
         })
 
         it('should throw BadRequestError if verification strategy not defined', async () => {
-            const documentType = <DocumentType>'wrong-type'
+            const documentType = 'wrong-type'
 
             const model = <DocumentVerificationOtpModel>{
                 documentId: 'docId',
@@ -410,7 +395,7 @@ describe(`Service ${DocumentVerificationService.name}`, () => {
         })
 
         it('should return document by barcode', async () => {
-            const documentType = <DocumentType>'document-type'
+            const documentType = 'document-type'
 
             const model = <DocumentVerificationOtpModel>{
                 documentId: 'docId',
@@ -439,7 +424,7 @@ describe(`Service ${DocumentVerificationService.name}`, () => {
     describe(`method: ${service.getValidatedVerificationRecordByBarcode.name}`, () => {
         it('should return verification response by data', async () => {
             const model = <DocumentVerificationOtpModel>(<unknown>{
-                registryDocumentType: <DocumentType>'document-type',
+                registryDocumentType: 'document-type',
                 expirationDate: 'expirationDate',
                 usedDate: 'usedDate',
                 hash: 'hash',
@@ -482,7 +467,7 @@ describe(`Service ${DocumentVerificationService.name}`, () => {
     describe(`method: ${service.getValidatedVerificationRecordByOtp.name}`, () => {
         it('should return not valid verification if failed to assert record', async () => {
             const model = <DocumentVerificationOtpModel>(<unknown>{
-                registryDocumentType: <DocumentType>'document-type',
+                registryDocumentType: 'document-type',
                 expirationDate: 'expirationDate',
                 usedDate: 'usedDate',
                 hash: 'hash',

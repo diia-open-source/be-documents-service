@@ -1,10 +1,9 @@
 import { Ean13Utils } from 'ean13-lib'
 import moment from 'moment'
-import { FilterQuery } from 'mongoose'
 
-import { MongoDBErrorCode } from '@diia-inhouse/db'
+import { FilterQuery, MongoDBErrorCode } from '@diia-inhouse/db'
 import { BadRequestError, ModelNotFoundError, NotFoundError } from '@diia-inhouse/errors'
-import { DocumentType, Logger } from '@diia-inhouse/types'
+import { Logger } from '@diia-inhouse/types'
 import { utils } from '@diia-inhouse/utils'
 
 import ArchiveService from '@services/archive'
@@ -81,7 +80,7 @@ export default class DocumentVerificationOtpService {
         await this.removeAllUnusedOtps()
     }
 
-    async verifyOtp(record: DocumentVerificationOtpModel, token: string, docType: DocumentType): Promise<VerifyOtpResponse> | never {
+    async verifyOtp(record: DocumentVerificationOtpModel, token: string, docType: string): Promise<VerifyOtpResponse> | never {
         this.logger.debug('OTP record', record)
         this.assertRecordIsValid(record, docType)
         this.logger.info('OTP successfully verified', record)
@@ -103,7 +102,7 @@ export default class DocumentVerificationOtpService {
         return await this.verifyOtp(record, token, record.registryDocumentType)
     }
 
-    assertRecordIsValid(record: DocumentVerificationOtpModel | undefined | null, docType?: DocumentType): never | void {
+    assertRecordIsValid(record: DocumentVerificationOtpModel | undefined | null, docType?: string): never | void {
         if (!record) {
             throw new NotFoundError('No record with presented code!')
         }

@@ -484,6 +484,7 @@ ASALocalRun/
 
 /dist/*
 .vscode
+# Private gitlab token
 .npmrc
 
 # IntelliJ IDEA project files

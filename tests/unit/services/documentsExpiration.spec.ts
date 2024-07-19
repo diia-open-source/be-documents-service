@@ -1,10 +1,10 @@
-import { DeleteResult } from 'mongodb'
-import { UpdateWriteOpResult } from 'mongoose'
-
+import { UpdateWriteOpResult, mongo } from '@diia-inhouse/db'
 import DiiaLogger from '@diia-inhouse/diia-logger'
 import { NotFoundError } from '@diia-inhouse/errors'
 import TestKit, { mockInstance } from '@diia-inhouse/test'
-import { DocStatus, DocumentType, DurationMs, OwnerType, PassportType } from '@diia-inhouse/types'
+import { DocStatus, DurationMs, OwnerType } from '@diia-inhouse/types'
+
+import { PassportType } from '@src/generated'
 
 import DocumentSettingsService from '@services/documentSettings'
 import DocumentsExpirationService from '@services/documentsExpiration'
@@ -13,10 +13,12 @@ import documentsExpirationModel from '@models/documentsExpiration'
 
 import PassportDataMapper from '@dataMappers/passportDataMapper'
 
-import PluginDepsCollectionMock, { getDocumentExpirationService } from '@mocks/stubs/documentDepsCollection'
+import { getDocumentExpirationService } from '@mocks/stubs/documentDepsCollection'
 
 import { AppConfig } from '@interfaces/config'
-import { DocumentSettingVersion, ExpirationType } from '@interfaces/models/documentSetting'
+import { ExpirationType } from '@interfaces/models/documentSetting'
+import { ForeignPassportInstance, InternalPassportInstance } from '@interfaces/providers/eis'
+import { PassportDocumentType } from '@interfaces/services/passport'
 
 describe('DocumentsExpirationService', () => {
     const testKit = new TestKit()
@@ -30,7 +32,7 @@ describe('DocumentsExpirationService', () => {
     }
     const loggerMock = mockInstance(DiiaLogger)
     const documentsExpirationService = new DocumentsExpirationService(
-        new PluginDepsCollectionMock([getDocumentExpirationService()]),
+        [getDocumentExpirationService()],
         documentSettingsServiceMock,
         passportDataMapperMock,
         config,
@@ -41,6 +43,8 @@ describe('DocumentsExpirationService', () => {
     const { identifier: userIdentifier } = user
     const { mobileUid } = headers
     const now = new Date()
+
+    documentsExpirationService.onRegistrationsFinished()
 
     beforeAll(() => {
         jest.useFakeTimers({ now })
@@ -64,7 +68,7 @@ describe('DocumentsExpirationService', () => {
 
     describe('method getDocumentIdsExpiration', () => {
         it('should successfully get document ids expiration', async () => {
-            const documentType = <DocumentType>'document-type'
+            const documentType = 'document-type'
             const documentExpiration = new documentsExpirationModel({
                 [documentType]: {
                     date: new Date(),
@@ -93,34 +97,8 @@ describe('DocumentsExpirationService', () => {
     describe('method collectDocumentExpirationModifier', () => {
         it.each([
             [
-                'custom expiration time is present and document is without expiration per user',
-                DocumentType.LocalVaccinationCertificate,
-                [],
-                ExpirationType.Success,
-                1800000,
-                { expirationTime: 1800000 },
-            ],
-            [
-                'custom expiration time is not present and document is without expiration per user',
-                DocumentType.LocalVaccinationCertificate,
-                [],
-                ExpirationType.Success,
-                undefined,
-                { expirationTime: 1800000 },
-                (): void => {
-                    jest.spyOn(documentSettingsServiceMock, 'getDocumentExpirationTime').mockResolvedValueOnce(1800000)
-                },
-                (): void => {
-                    expect(documentSettingsServiceMock.getDocumentExpirationTime).toHaveBeenCalledWith(
-                        DocumentType.LocalVaccinationCertificate,
-                        ExpirationType.Success,
-                        DocumentSettingVersion.V1,
-                    )
-                },
-            ],
-            [
                 'custom expiration time is present and document is with expiration per user',
-                <DocumentType>'document-type-3',
+                'document-type-3',
                 [{ id: 'id', ownerType: OwnerType.owner, status: DocStatus.Ok }],
                 ExpirationType.Success,
                 1800000,
@@ -205,7 +183,7 @@ describe('DocumentsExpirationService', () => {
                 },
             ],
         ])('should successfully run remove process when deleted count is %s', async (deletedCount, checkExpectations) => {
-            jest.spyOn(documentsExpirationModel, 'deleteOne').mockResolvedValueOnce(<DeleteResult>{ deletedCount })
+            jest.spyOn(documentsExpirationModel, 'deleteOne').mockResolvedValueOnce(<mongo.DeleteResult>{ deletedCount })
 
             await documentsExpirationService.removeUserExpirationsByMobileUid(mobileUid, userIdentifier)
 
@@ -216,13 +194,13 @@ describe('DocumentsExpirationService', () => {
 
     describe('method getPassportId', () => {
         it('should successfully get passport id for internal passport', async () => {
-            const { docNumber: unzr, id } = testKit.docs.getInternalPassport()
-            const documentsExpiration = new documentsExpirationModel({
-                [DocumentType.InternalPassport]: {
+            const { docNumber: unzr, id } = <InternalPassportInstance>testKit.docs.generateDocument(PassportDocumentType.InternalPassport)
+            const documentsExpiration = {
+                [PassportDocumentType.InternalPassport]: {
                     date: now,
                     statuses: { [id]: { ownerType: OwnerType.owner, value: DocStatus.Ok } },
                 },
-            })
+            }
 
             jest.spyOn(documentsExpirationModel, 'findOne').mockResolvedValueOnce(documentsExpiration)
             jest.spyOn(passportDataMapperMock, 'extractUnzr').mockReturnValueOnce(unzr)
@@ -240,16 +218,16 @@ describe('DocumentsExpirationService', () => {
         })
 
         it('should successfully get passport id for foreign passport', async () => {
-            const { docNumber: unzr, id } = testKit.docs.getForeignPassport()
-            const documentsExpiration = new documentsExpirationModel({
-                [DocumentType.InternalPassport]: {
+            const { docNumber: unzr, id } = <ForeignPassportInstance>testKit.docs.generateDocument(PassportDocumentType.ForeignPassport)
+            const documentsExpiration = {
+                [PassportDocumentType.InternalPassport]: {
                     date: now,
                 },
-                [DocumentType.ForeignPassport]: {
+                [PassportDocumentType.ForeignPassport]: {
                     date: now,
                     statuses: { [id]: { ownerType: OwnerType.owner, value: DocStatus.Ok } },
                 },
-            })
+            }
 
             jest.spyOn(documentsExpirationModel, 'findOne').mockResolvedValueOnce(documentsExpiration)
             jest.spyOn(passportDataMapperMock, 'extractUnzr').mockReturnValueOnce(unzr)
@@ -268,10 +246,10 @@ describe('DocumentsExpirationService', () => {
 
         it('should fail to get passport id in case none of passports statuses are present', async () => {
             const documentsExpiration = new documentsExpirationModel({
-                [DocumentType.InternalPassport]: {
+                [PassportDocumentType.InternalPassport]: {
                     date: now,
                 },
-                [DocumentType.ForeignPassport]: {
+                [PassportDocumentType.ForeignPassport]: {
                     date: now,
                 },
             })
@@ -299,7 +277,7 @@ describe('DocumentsExpirationService', () => {
 
     describe('method expireDocumentByType', () => {
         it('should successfully expire document by type', async () => {
-            const documentType = <DocumentType>'document-type'
+            const documentType = 'document-type'
             const expirationDate: Date = new Date()
             const expirationsModifier = {
                 $set: { [`${documentType}.date`]: expirationDate },
@@ -315,20 +293,22 @@ describe('DocumentsExpirationService', () => {
 
     describe('method checkDocumentExpiration', () => {
         it('should skip checking in case documents expiration is disabled in configuration', () => {
-            const documentType = <DocumentType>'document-to-not-skip'
+            const documentType = 'document-to-not-skip'
             const documentsExpirationServiceWithDisabledExpiration = new DocumentsExpirationService(
-                new PluginDepsCollectionMock([getDocumentExpirationService()]),
+                [getDocumentExpirationService()],
                 documentSettingsServiceMock,
                 passportDataMapperMock,
                 <AppConfig>{ app: { isDocumentsExpirationEnabled: false } },
                 loggerMock,
             )
 
+            documentsExpirationServiceWithDisabledExpiration.onRegistrationsFinished()
+
             expect(documentsExpirationServiceWithDisabledExpiration.checkDocumentExpiration(documentType, { date: now })).toBeUndefined()
         })
 
         it('should successfully check and return not expired', () => {
-            const documentType = <DocumentType>'document-to-not-skip'
+            const documentType = 'document-to-not-skip'
             const expirationDate = new Date(now.getTime() + 30000)
 
             const result = documentsExpirationService.checkDocumentExpiration(documentType, { date: expirationDate })

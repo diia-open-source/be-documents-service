@@ -1,0 +1,78 @@
+syntax = "proto3";
+
+import "google/protobuf/timestamp.proto";
+
+import "designSystem/organisms/verificationCodesOrg.proto";
+import "documents/documentData.proto";
+
+import "document.proto";
+
+package ua.gov.diia.document;
+option java_multiple_files = true;
+option java_package = "ua.gov.diia.document";
+
+enum BirthCertificateSource {
+  actRecord = 0;
+  manual = 1;
+}
+
+message BirthCertificate {
+  BirthCertificateSource source = 1;
+  string id = 2;
+  Document document = 3;
+  repeated Document documents = 4;
+  Child child = 5;
+  Parents parents = 6;
+  Act act = 7;
+  // DocumentMetaData
+  int32 docStatus = 8;
+  string docNumber = 9;
+  optional string docSubtype = 10;
+  optional ua.gov.diia.types.documents.OwnerType ownerType = 11;
+  optional google.protobuf.Timestamp registrationDate = 12;
+  optional string expirationDate = 13;
+  optional DocumentTicker tickerOptions = 14;
+  optional string fullNameHash = 15;
+}
+
+message Document {
+  string serie = 1;
+  string serieOriginal = 2;
+  string number = 3;
+  string serieNumber = 4;
+  string department = 5;
+  string issueDate = 6;
+}
+
+message Child {
+  string lastName = 1;
+  string firstName = 2;
+  string middleName = 3;
+  string gender = 4;
+  string birthDate = 5;
+  string birthPlace = 6;
+  string birthState = 7;
+  optional string currentRegistrationPlaceUA = 8;
+  optional string citizenship = 9;
+  optional string rnokpp = 10;
+}
+
+message Parents {
+  Parent father = 1;
+  Parent mother = 2;
+}
+
+message Parent {
+  string fullName = 1;
+  string birthDate = 2;
+  optional string citizenship = 3;
+  optional string rnokpp = 4;
+}
+
+message Act {
+  string name = 1;
+  string registrationPlace = 2;
+  string number = 3;
+  string date = 4;
+  string parenthood = 5;
+}

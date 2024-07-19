@@ -27,6 +27,7 @@ describe(`Action ${GetPassportByInnAction.name}`, () => {
         const passportByInn = getPassportWithRegistration()
 
         jest.spyOn(passportService, 'getPassportByInn').mockResolvedValueOnce(passportByInn)
+        // eslint-disable-next-line unicorn/no-useless-undefined
         jest.spyOn(passportService, 'getRegistration').mockResolvedValueOnce(undefined)
 
         expect(await action.handler(args)).toMatchObject({ passport: passportByInn.passport, registration: passportByInn.registrationV1 })

@@ -1,11 +1,13 @@
+import { randomUUID } from 'node:crypto'
+
 import TestKit, { mockInstance } from '@diia-inhouse/test'
-import { DocumentType, HttpStatusCode } from '@diia-inhouse/types'
+import { HttpStatusCode } from '@diia-inhouse/types'
 
 import GetDocumentsAction from '@actions/v1/getDocuments'
 
 import DocumentsService from '@services/documents'
 
-import { DocumentResponseVariation, DocumentTypeResponse, DocumentsWithOrder } from '@interfaces/services/documents'
+import { DocumentResponseVariation, DocumentsWithOrder } from '@interfaces/services/documents'
 
 describe(`Action ${GetDocumentsAction.name}`, () => {
     const testKit = new TestKit()
@@ -16,21 +18,21 @@ describe(`Action ${GetDocumentsAction.name}`, () => {
         const { headers, session } = testKit.session.getUserActionArguments()
         const args = {
             params: {
-                filter: [<DocumentType>'document-type'],
+                filter: ['document-type'],
             },
             headers,
             session,
         }
 
-        const document = new Object()
+        const document = <DocumentResponseVariation>{ id: randomUUID() }
 
         const mockData: DocumentsWithOrder<DocumentResponseVariation> = {
-            [<DocumentTypeResponse>'document-type-response']: {
+            ['document-type-response']: {
                 status: HttpStatusCode.ACCEPTED,
                 data: [document],
                 unavailableData: [],
             },
-            documentsTypeOrder: [<DocumentTypeResponse>'document-type-response'],
+            documentsTypeOrder: ['document-type-response'],
         }
 
         jest.spyOn(documentsService, 'getDocuments').mockResolvedValueOnce(mockData)

@@ -1,4 +1,6 @@
-import { AppUserActionHeaders, DriverLicense, UserActionArguments } from '@diia-inhouse/types'
+import { AppUserActionHeaders, UserActionArguments } from '@diia-inhouse/types'
+
+import { DriverLicense } from '@src/documents/driverLicense/interfaces/services'
 
 interface ActionHeaders extends AppUserActionHeaders {
     token: string

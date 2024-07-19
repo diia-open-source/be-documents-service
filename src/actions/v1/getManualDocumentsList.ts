@@ -18,8 +18,9 @@ export default class GetManualDocumentsListAction implements AppAction {
     async handler(args: CustomActionArguments): Promise<ActionResult> {
         const {
             session: { user },
+            headers: { appVersion, platformType, platformVersion },
         } = args
 
-        return await this.manualDocumentsListService.getListV1(user)
+        return await this.manualDocumentsListService.getListV1(user, { appVersion, platformType, platformVersion })
     }
 }

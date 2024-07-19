@@ -1,10 +1,10 @@
-import { DocumentType, ListItemGroupOrg, ListItemMlc } from '@diia-inhouse/types'
+import { AppUser, ListItemGroupOrg, ListItemMlc, WithAppVersions } from '@diia-inhouse/types'
 
-export interface ManualDocumentListItem {
+export interface ManualDocumentListItem extends WithAppVersions {
     code: string
     name: string
     isActive: boolean
-    hiddenIfAnyOfDocumentsOwned?: DocumentType[]
+    hiddenIfAnyOfDocumentsOwned?: string[]
 }
 
 export interface ManualDocumentListItemWithOrder extends ManualDocumentListItem {
@@ -23,4 +23,4 @@ export interface ManualDocumentsListResponse {
     }
 }
 
-export type ShowInManualListStrategy = (id: string, code: string) => Promise<boolean>
+export type ShowInManualListStrategy = (user: AppUser, code: string) => Promise<boolean>

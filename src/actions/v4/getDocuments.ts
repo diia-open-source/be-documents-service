@@ -9,7 +9,15 @@ import DocumentsService from '@services/documents'
 import { ActionResult, CustomActionArguments } from '@interfaces/actions/v4/getDocuments'
 
 export default class GetDocumentsAction implements AppAction {
-    constructor(private readonly documentsService: DocumentsService) {}
+    constructor(private readonly documentsService: DocumentsService) {
+        this.validationRules = {
+            filter: {
+                type: 'array',
+                items: { type: 'string', enum: this.documentsService.documentFilters },
+                optional: true,
+            },
+        }
+    }
 
     readonly sessionType: SessionType = SessionType.User
 
@@ -17,25 +25,20 @@ export default class GetDocumentsAction implements AppAction {
 
     readonly name: string = 'getDocuments'
 
-    readonly validationRules: ValidationSchema = {
-        filter: {
-            type: 'array',
-            items: { type: 'string', enum: this.documentsService.documentFilters },
-            optional: true,
-        },
-    }
+    readonly validationRules: ValidationSchema
 
     async handler(args: CustomActionArguments): Promise<ActionResult> {
         const {
             session: { user },
             params: { filter = this.documentsService.documentFiltersBySessionType[user.sessionType] },
             headers,
+            session,
         } = args
 
         if (!filter) {
             throw new BadRequestError('Filter parameters is not defined')
         }
 
-        return await this.documentsService.getDocuments(args.session, filter, headers, { withCover: true })
+        return await this.documentsService.getDocuments(session, filter, headers, { withCover: true })
     }
 }

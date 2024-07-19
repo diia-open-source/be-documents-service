@@ -1,27 +1,28 @@
-import { randomUUID } from 'crypto'
+import { randomUUID } from 'node:crypto'
 
 import DiiaLogger from '@diia-inhouse/diia-logger'
 import TestKit, { mockInstance } from '@diia-inhouse/test'
-import { DocStatus, DocumentType, HttpStatusCode } from '@diia-inhouse/types'
+import { DocStatus, HttpStatusCode } from '@diia-inhouse/types'
 
 import AnalyticsService from '@src/services/analytics'
 
-import PluginDepsCollectionMock, { getDocumentAnalyticsService } from '@mocks/stubs/documentDepsCollection'
+import { getDocumentAnalyticsService } from '@mocks/stubs/documentDepsCollection'
 
 import { AppConfig } from '@interfaces/config'
 import { AnalyticsActionResult, DocumentAnalyticsCategory } from '@interfaces/services'
 import { Document } from '@interfaces/services/documents'
 
 describe('AnalyticsService', () => {
+    const testKit = new TestKit()
     const configMock = <AppConfig>(<unknown>{
         app: {
             dateFormat: 'DD.MM.YYYY',
         },
     })
     const loggerMock = mockInstance(DiiaLogger)
-    const analyticsService = new AnalyticsService(loggerMock, configMock, new PluginDepsCollectionMock([getDocumentAnalyticsService()]))
+    const analyticsService = new AnalyticsService(loggerMock, configMock, [getDocumentAnalyticsService()])
 
-    const testKit = new TestKit()
+    analyticsService.onRegistrationsFinished()
 
     describe('method: `getActionResultByStatusCode`', () => {
         it.each([
@@ -50,7 +51,9 @@ describe('AnalyticsService', () => {
 
     describe('method: `getActionResult`', () => {
         it('should return error for both undefined parameters', () => {
-            expect(analyticsService.getActionResult(undefined, undefined)).toBe(AnalyticsActionResult.Error)
+            const undefinedParameter = undefined
+
+            expect(analyticsService.getActionResult(undefinedParameter, undefinedParameter)).toBe(AnalyticsActionResult.Error)
         })
     })
 
@@ -65,7 +68,7 @@ describe('AnalyticsService', () => {
             }
 
             analyticsService.logDocumentAnalytics({
-                documentType: <DocumentType>'document-type',
+                documentType: 'document-type',
                 document: <Document>document,
                 userIdentifier: user.identifier,
                 headers,
@@ -96,7 +99,7 @@ describe('AnalyticsService', () => {
             }
 
             analyticsService.logDocumentAnalytics({
-                documentType: <DocumentType>'document-type',
+                documentType: 'document-type',
                 document: <Document>(<unknown>{ ...document, docData: { expirationDate: document.expirationDate } }),
                 userIdentifier: user.identifier,
                 headers,
@@ -127,7 +130,7 @@ describe('AnalyticsService', () => {
             }
 
             analyticsService.logDocumentAnalytics({
-                documentType: <DocumentType>'document-type',
+                documentType: 'document-type',
                 document: undefined,
                 userIdentifier: user.identifier,
                 headers,
@@ -154,7 +157,7 @@ describe('AnalyticsService', () => {
             }
 
             analyticsService.logDocumentAnalytics({
-                documentType: <DocumentType>'document-type',
+                documentType: 'document-type',
                 document: undefined,
                 userIdentifier: user.identifier,
                 headers,

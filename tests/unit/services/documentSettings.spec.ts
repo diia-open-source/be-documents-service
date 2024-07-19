@@ -1,8 +1,8 @@
 import DiiaLogger from '@diia-inhouse/diia-logger'
 import { mockInstance } from '@diia-inhouse/test'
-import { DocumentType } from '@diia-inhouse/types'
 
 import DocumentSettingsService from '@services/documentSettings'
+import UserDocumentSettingsService from '@services/userDocumentSettings'
 
 import documentSettingModel from '@models/documentSetting'
 
@@ -10,10 +10,11 @@ import { DocumentSettingVersion, ExpirationType } from '@interfaces/models/docum
 
 describe('DocumentSettingsService', () => {
     const loggerMock = mockInstance(DiiaLogger)
-    const documentSettingsService = new DocumentSettingsService(loggerMock)
+    const userDocumentSettingsServiceMock = mockInstance(UserDocumentSettingsService)
+    const documentSettingsService = new DocumentSettingsService(loggerMock, userDocumentSettingsServiceMock)
 
     describe('method: getDocumentExpirationTime', () => {
-        const type = <DocumentType>'document-type'
+        const type = 'document-type'
         const expirationType = ExpirationType.Success
         const version = DocumentSettingVersion.V1
 

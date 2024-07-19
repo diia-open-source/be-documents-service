@@ -1,5 +1,4 @@
 import TestKit, { mockInstance } from '@diia-inhouse/test'
-import { DocumentType } from '@diia-inhouse/types'
 
 import HasDocumentInRegistryAction from '@actions/v1/hasDocumentInRegistry'
 
@@ -14,7 +13,7 @@ describe(`Action ${HasDocumentInRegistryAction.name}`, () => {
         const { headers, session } = testKit.session.getUserActionArguments()
         const args = {
             params: {
-                documentType: <DocumentType>'document-type',
+                documentType: 'document-type',
             },
             session,
             headers,

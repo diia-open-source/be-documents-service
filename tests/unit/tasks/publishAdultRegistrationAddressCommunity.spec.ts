@@ -1,7 +1,7 @@
-import { randomUUID } from 'crypto'
+import { randomUUID } from 'node:crypto'
 
 import Logger from '@diia-inhouse/diia-logger'
-import { EventBus, InternalEvent } from '@diia-inhouse/diia-queue'
+import { EventBus } from '@diia-inhouse/diia-queue'
 import { NotFoundError } from '@diia-inhouse/errors'
 import { StoreService } from '@diia-inhouse/redis'
 import TestKit, { mockInstance } from '@diia-inhouse/test'
@@ -13,6 +13,7 @@ import PassportService from '@services/passport'
 
 import { getPassportInfo, getPassportRegistrationInfo } from '@mocks/stubs'
 
+import { InternalEvent } from '@interfaces/queue'
 import { EventPayload } from '@interfaces/tasks/publishAdultRegistrationAddressCommunity'
 
 describe(`Task ${PublishAdultRegistrationAddressCommunityTask.name}`, () => {
@@ -91,7 +92,7 @@ describe(`Task ${PublishAdultRegistrationAddressCommunityTask.name}`, () => {
 
         const storeGetSpy = jest.spyOn(storeService, 'get').mockResolvedValueOnce(null)
         const storeSetSpy = jest.spyOn(storeService, 'set').mockClear()
-        const getPassportByInnSpy = jest.spyOn(passportService, 'getPassportByInn').mockRejectedValueOnce(new Error())
+        const getPassportByInnSpy = jest.spyOn(passportService, 'getPassportByInn').mockRejectedValueOnce(new Error('Error'))
         const publishSpy = jest.spyOn(eventBus, 'publish').mockClear()
 
         await expect(task.handler(params)).resolves.toBeUndefined()

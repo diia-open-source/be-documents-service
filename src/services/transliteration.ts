@@ -89,17 +89,17 @@ export default class TransliterationService {
 
     transliterate(inputText: string): string {
         let outputText: string = inputText
-        const words: string[] = inputText.split(/[-_ \n]/)
+        const words: string[] = inputText.split(/[\n _-]/)
 
-        words.forEach((word: string) => {
+        for (const word of words) {
             let wordTransliteration: string = word
 
-            this.rules.forEach(({ pattern, replace }: Rule) => {
-                wordTransliteration = wordTransliteration.replace(new RegExp(pattern, 'gm'), replace)
-            })
+            for (const { pattern, replace } of this.rules) {
+                wordTransliteration = wordTransliteration.replaceAll(new RegExp(pattern, 'gm'), replace)
+            }
 
             outputText = outputText.replace(word, wordTransliteration)
-        })
+        }
 
         return outputText
     }

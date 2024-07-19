@@ -6,18 +6,17 @@ import UserService from '@services/user'
 
 import ManualDocumentsListDataMapper from '@dataMappers/manualDocumentsListDataMapper'
 
-import PluginDepsCollectionMock, { getDocumentService } from '@mocks/stubs/documentDepsCollection'
+import { getDocumentService } from '@mocks/stubs/documentDepsCollection'
 
 describe('ManualDocumentsListService', () => {
     const testKit = new TestKit()
     const loggerMock = mockInstance(DiiaLogger)
     const userServiceMock = mockInstance(UserService)
     const manualDocumentsListDataMapperMock = mockInstance(ManualDocumentsListDataMapper)
-    const pluginCollection = new PluginDepsCollectionMock([getDocumentService()])
     const manualDocumentsListService = new ManualDocumentsListService(
         loggerMock,
         userServiceMock,
-        pluginCollection,
+        [getDocumentService()],
         manualDocumentsListDataMapperMock,
     )
 
@@ -35,7 +34,12 @@ describe('ManualDocumentsListService', () => {
             order: 14,
         },
     ]
-    const { user } = testKit.session.getUserSession()
+    const {
+        session: { user },
+        headers,
+    } = testKit.session.getUserActionArguments()
+
+    manualDocumentsListService.onRegistrationsFinished()
 
     describe('method getList', () => {
         it('should successfully fetch list of manual documents', async () => {
@@ -47,7 +51,11 @@ describe('ManualDocumentsListService', () => {
                 return document
             })
 
-            const result = await manualDocumentsListService.getList(user)
+            const result = await manualDocumentsListService.getList(user, {
+                appVersion: headers.appVersion,
+                platformType: headers.platformType,
+                platformVersion: headers.platformVersion,
+            })
 
             expect(result).toEqual({
                 contextMenuOrg: {

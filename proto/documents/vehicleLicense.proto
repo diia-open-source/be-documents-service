@@ -1,0 +1,103 @@
+syntax = "proto3";
+
+import "google/protobuf/timestamp.proto";
+
+import "documents/documentData.proto";
+import "documents/nameValue.proto";
+
+import "document.proto";
+import "documents/vehicleInsurancePolicy.proto";
+
+package ua.gov.diia.document;
+option java_multiple_files = true;
+option java_package = "ua.gov.diia.document";
+
+message VehicleLicense {
+  string id = 1;
+  string docNumber = 2;
+  string licensePlate = 3;
+  string clientId = 4;
+  string serial = 5;
+  string number = 6;
+  string brand = 7;
+  string model = 8;
+  string vin = 9;
+  string color = 10;
+  optional string kindBody = 11;
+  string makeYear = 12;
+  string totalWeight = 13;
+  string ownWeight = 14;
+  string capacity = 15;
+  string fuel = 16;
+  string rankCategory = 17;
+  optional string rankName = 18;
+  string seatsNumber = 19;
+  string standingNumber = 20;
+  string dateFirstReg = 21;
+  string dateReg = 22;
+  string lastNameUA = 23;
+  string firstNameUA = 24;
+  string middleNameUA = 25;
+  string lastNameEN = 26;
+  string firstNameEN = 27;
+  string birthday = 28;
+  string address = 29;
+  optional string departmentId = 30;
+  optional string department = 31;
+  ua.gov.diia.types.documents.OwnerType ownerType = 32;
+  string ownerTypeUA = 33;
+  optional google.protobuf.Timestamp properUserFrom = 34;
+  optional google.protobuf.Timestamp properUserUntil = 35;
+  optional ua.gov.diia.document.VehicleInsurancePolicy insurancePolicy = 36;
+  optional ua.gov.diia.document.Localization shareLocalization = 37;
+  optional VehicleLicenseDetails ua = 38;
+  optional VehicleLicenseDetails eng = 39;
+  // DocumentMetaData
+  int32 docStatus = 40;
+  optional string docSubtype = 41;
+  optional google.protobuf.Timestamp registrationDate = 42;
+  optional string expirationDate = 43;
+  optional ua.gov.diia.document.DocumentTicker tickerOptions = 44;
+  optional string fullNameHash = 45;
+}
+
+message VehicleLicenseDetails {
+  message Card {
+    string name = 1;
+    string icon = 2;
+    ua.gov.diia.types.documents.NameValue brand = 3;
+    ua.gov.diia.types.documents.NameValue model = 4;
+    ua.gov.diia.types.documents.NameValue vin = 5;
+    ua.gov.diia.types.documents.NameValue ownership = 6;
+  }
+
+  Card card = 1;
+  string name = 2;
+  string icon = 3;
+  string country = 4;
+  ua.gov.diia.types.documents.NameValueWithCode licensePlate = 5;
+  ua.gov.diia.types.documents.NameValueWithCode firstRegistrationDate = 6;
+  ua.gov.diia.types.documents.NameValueWithCode makeYear = 7;
+  ua.gov.diia.types.documents.NameValueWithCode registrationDate = 8;
+  ua.gov.diia.types.documents.NameValueWithCode documentNumber = 9;
+  ua.gov.diia.types.documents.NameValueWithCode department = 10;
+  ua.gov.diia.types.documents.NameValueWithCode lastName = 11;
+  ua.gov.diia.types.documents.NameValueWithCode firstName = 12;
+  ua.gov.diia.types.documents.NameValueWithCode address = 13;
+  ua.gov.diia.types.documents.NameValueWithCode ownership = 14;
+  ua.gov.diia.types.documents.NameValueWithCode brand = 15;
+  ua.gov.diia.types.documents.NameValueWithCode model = 16;
+  ua.gov.diia.types.documents.NameValueWithCode vin = 17;
+  ua.gov.diia.types.documents.NameValueWithCode totalWeight = 18;
+  ua.gov.diia.types.documents.NameValueWithCode ownWeight = 19;
+  ua.gov.diia.types.documents.NameValueWithCode rankCategory = 20;
+  ua.gov.diia.types.documents.NameValueWithCode capacity = 21;
+  ua.gov.diia.types.documents.NameValueWithCode fuel = 22;
+  ua.gov.diia.types.documents.NameValueWithCode color = 23;
+  ua.gov.diia.types.documents.NameValueWithCode nseating = 24;
+  ua.gov.diia.types.documents.NameValueWithCode nstandup = 25;
+  ua.gov.diia.types.documents.NameValueWithCode kindBody = 26;
+  optional ua.gov.diia.document.DocumentTicker tickerOptions = 27;
+  optional ua.gov.diia.types.documents.NameValue properUser = 28;
+  optional ua.gov.diia.types.documents.NameValue properUserExpirationDate = 29;
+}

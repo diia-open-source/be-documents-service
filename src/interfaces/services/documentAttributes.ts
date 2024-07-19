@@ -1,4 +1,4 @@
-import { DocumentType, Localization, TickerAtmAction } from '@diia-inhouse/types'
+import { Localization, TickerAtmAction } from '@diia-inhouse/types'
 
 export type DocumentCoverAction = 'deleteDocument' | 'inLine' | 'toDriverAccount'
 
@@ -41,7 +41,7 @@ export enum DocumentTickerPlaceholder {
 export interface DocumentTickerParams {
     code: DocumentTickerCode
     localization?: Localization
-    documentType?: DocumentType
+    documentType?: string
     templateParams?: Partial<Record<DocumentTickerPlaceholder, string>>
     action?: TickerAtmAction
 }

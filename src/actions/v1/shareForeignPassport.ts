@@ -1,13 +1,13 @@
 import { AppAction } from '@diia-inhouse/diia-app'
 
-import { ActionVersion, DocumentType, Localization, SessionType } from '@diia-inhouse/types'
+import { ActionVersion, Localization, SessionType } from '@diia-inhouse/types'
 import { ValidationSchema } from '@diia-inhouse/validators'
 
 import DocumentVerificationService from '@services/documentVerification'
 
 import { CustomActionArguments } from '@interfaces/actions/v1/shareForeignPassport'
-import { PassportType } from '@interfaces/dto'
-import { PassportAssertParams, ShareLinkResponse } from '@interfaces/services/documentVerification'
+import { ShareLinkResponse } from '@interfaces/services/documentVerification'
+import { PassportDocumentType } from '@interfaces/services/passport'
 
 export default class ShareForeignPassportAction implements AppAction {
     constructor(private readonly documentVerificationService: DocumentVerificationService) {}
@@ -30,15 +30,11 @@ export default class ShareForeignPassportAction implements AppAction {
             headers,
         } = args
 
-        const documentAssertParams: PassportAssertParams = { user, passportType: PassportType.P }
-
         return await this.documentVerificationService.generateOtpLink({
-            documentType: DocumentType.ForeignPassport,
+            documentType: PassportDocumentType.ForeignPassport,
             documentId,
             headers,
-            userIdentifier: user.identifier,
-            documentAssertParams,
-            generateBarcode: true,
+            user,
             localization,
         })
     }

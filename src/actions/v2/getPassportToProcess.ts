@@ -4,13 +4,14 @@ import { NotFoundError, UnprocessableEntityError } from '@diia-inhouse/errors'
 import { ActionVersion, SessionType } from '@diia-inhouse/types'
 import { ValidationSchema } from '@diia-inhouse/validators'
 
+import { PassportType } from '@src/generated'
+
 import DocumentsService from '@services/documents'
 import PassportService from '@services/passport'
 
 import PassportDataMapper from '@dataMappers/passportDataMapper'
 
 import { ActionResult, CustomActionArguments } from '@interfaces/actions/v2/getPassportToProcess'
-import { PassportType } from '@interfaces/dto'
 import { ForeignPassportInstance, InternalPassportInstance, Passport } from '@interfaces/providers/eis'
 
 export default class GetPassportToProcessAction implements GrpcAppAction {

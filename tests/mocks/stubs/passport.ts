@@ -1,11 +1,11 @@
 import { merge } from 'lodash'
 import { PartialDeep } from 'type-fest'
 
-import { PassportByInnDocumentType, PassportRegistrationInfo } from '@src/generated'
+import { PassportByInnDocumentType, PassportRegistrationInfo, PassportType } from '@src/generated'
 
 import photo from '@tests/mocks/stubs/photo'
 
-import { PassportGenderEN, PassportType } from '@interfaces/dto'
+import { PassportGenderEN } from '@interfaces/dto'
 import { PassportByInn, PassportInfo } from '@interfaces/providers/dms'
 import { InternalPassportInstance } from '@interfaces/providers/eis'
 import { DocumentWithCover } from '@interfaces/services/documents'

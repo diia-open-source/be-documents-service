@@ -1,7 +1,5 @@
-import { PluginDepsCollection } from '@diia-inhouse/diia-app'
-
 import { IdentifierService } from '@diia-inhouse/crypto'
-import { DocStatus, DocumentType } from '@diia-inhouse/types'
+import { DocStatus, OnRegistrationsFinished } from '@diia-inhouse/types'
 
 import DocumentAttributesService from '@services/documentAttributes'
 
@@ -11,20 +9,30 @@ import { DocumentDataMapper } from '@interfaces/dataMappers'
 import { CommonDocument, DocumentWithCover, EnrichUserProfileDocumentStrategy } from '@interfaces/services/documents'
 import { UserProfileDocument } from '@interfaces/services/user'
 
-export default class DocumentsDataMapper {
-    private readonly enrichUserProfileDocumentByDocumentType: Partial<Record<DocumentType, EnrichUserProfileDocumentStrategy>> = {}
+export default class DocumentsDataMapper implements OnRegistrationsFinished {
+    private readonly enrichUserProfileDocumentByDocumentType: Record<string, EnrichUserProfileDocumentStrategy> = {}
 
     constructor(
         private readonly appUtils: Utils,
         private readonly identifier: IdentifierService,
         private readonly documentAttributesService: DocumentAttributesService,
-        private readonly documentDataMappers: PluginDepsCollection<DocumentDataMapper>,
-    ) {
-        this.loadPluginDeps(this.documentDataMappers.items)
-        this.documentDataMappers.on('newItems', (instances) => this.loadPluginDeps(instances))
+        private readonly documentDataMappers: DocumentDataMapper<object, string>[],
+    ) {}
+
+    onRegistrationsFinished(): void {
+        for (const instance of this.documentDataMappers) {
+            const { documentTypes = [], enrichUserProfileDocument } = instance
+
+            for (const documentType of documentTypes) {
+                Object.assign(
+                    this.enrichUserProfileDocumentByDocumentType,
+                    enrichUserProfileDocument ? { [documentType]: enrichUserProfileDocument.bind(instance) } : {},
+                )
+            }
+        }
     }
 
-    toDocumentsWithCover(documents: CommonDocument[], documentType: DocumentType): DocumentWithCover[] {
+    toDocumentsWithCover(documents: CommonDocument[], documentType: string): DocumentWithCover[] {
         return documents.map(({ id, docStatus, ...rest }) => ({
             id,
             docStatus,
@@ -39,7 +47,7 @@ export default class DocumentsDataMapper {
         }))
     }
 
-    toUserProfileDocument(documentType: DocumentType, document: CommonDocument): UserProfileDocument {
+    toUserProfileDocument(documentType: string, document: CommonDocument): UserProfileDocument {
         const { id, docStatus, docNumber, fullNameHash } = document
 
         const documentSubType = this.appUtils.getDocumentSubType(document)
@@ -65,18 +73,5 @@ export default class DocumentsDataMapper {
         }
 
         return profileDocument
-    }
-
-    private loadPluginDeps(instances: DocumentDataMapper[]): void {
-        instances.forEach((instance) => {
-            const { documentTypes = [], enrichUserProfileDocument } = instance
-
-            documentTypes.forEach((documentType) => {
-                Object.assign(
-                    this.enrichUserProfileDocumentByDocumentType,
-                    enrichUserProfileDocument ? { [documentType]: enrichUserProfileDocument.bind(instance) } : {},
-                )
-            })
-        })
     }
 }

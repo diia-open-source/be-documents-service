@@ -2,26 +2,17 @@ import moment from 'moment'
 
 import DiiaLogger from '@diia-inhouse/diia-logger'
 import TestKit, { mockInstance } from '@diia-inhouse/test'
-import {
-    ActionCode,
-    DocStatus,
-    DocumentInstance,
-    DocumentType,
-    DocumentTypeCamelCase,
-    Icon,
-    IconAtmActionType,
-    Localization,
-    TickerAtmType,
-    TickerAtmUsage,
-} from '@diia-inhouse/types'
+import { ActionCode, DocStatus, Icon, IconAtmActionType, Localization, TickerAtm, TickerAtmType, TickerAtmUsage } from '@diia-inhouse/types'
 
 import TaxpayerCardDataMapper from '@src/documents/taxpayerCard/dataMappers/document'
+import { DocumentType, DocumentTypeCamelCase, TaxpayerCard } from '@src/documents/taxpayerCard/interfaces/services'
 
 import DocumentAttributesService from '@services/documentAttributes'
 
 import DesignSystemDataMapper from '@dataMappers/designSystemDataMapper'
 
 import { RnokppErrorCode } from '@interfaces/providers/drfo'
+import { DocumentInstance } from '@interfaces/services'
 import { DocumentTickerCode, DocumentTickerPlaceholder } from '@interfaces/services/documentAttributes'
 
 describe('documents', () => {
@@ -32,14 +23,16 @@ describe('documents', () => {
     const taxPayerCardDataMapper = new TaxpayerCardDataMapper(loggerMock, designSystemDataMapperMock, documentAttributesServiceMock)
     const today = moment().format('DD.MM.YYYY')
     const { user } = testKit.session.getUserSession()
-    const taxpayerCard = testKit.docs.getTaxpayerCard()
+    const taxpayerCard = <TaxpayerCard>testKit.docs.generateDocument(DocumentType.TaxpayerCard)
     const { docNumber, id, birthday } = taxpayerCard
     const docName = 'Картка платника податків'
-    const tickerAtm = {
+    const tickerAtm: TickerAtm = {
         usage: TickerAtmUsage.document,
         type: TickerAtmType.positive,
         value: expect.any(String),
+        componentId: expect.any(String),
     }
+
     const fullNameUa = 'Дія Надія Володимирівна'
     const docNameWithSeparator = 'Картка платника\nподатків'
     const fullNameUaWithSeparator = 'Дія\nНадія\nВолодимирівна'
@@ -358,10 +351,10 @@ describe('documents', () => {
                                 },
                                 iconAtm: {
                                     code: Icon.ellipseKebab,
-                                    accessibilityDescription: DocumentTypeCamelCase.taxpayerCard,
+                                    accessibilityDescription: DocumentTypeCamelCase.TaxpayerCard,
                                     action: {
                                         type: IconAtmActionType.ellipseMenu,
-                                        subtype: DocumentTypeCamelCase.taxpayerCard,
+                                        subtype: DocumentTypeCamelCase.TaxpayerCard,
                                     },
                                 },
                             },

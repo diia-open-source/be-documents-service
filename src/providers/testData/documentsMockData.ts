@@ -1,6 +1,4 @@
-import { PassportGenderEN } from '@diia-inhouse/types'
-
-import { PassportByInnDocumentType } from '@src/generated'
+import { PassportByInnDocumentType, PassportGenderEN } from '@src/generated'
 
 import { photo } from '@providers/testData/photo'
 

@@ -1,12 +1,13 @@
-import { createHash, randomUUID as uuid } from 'crypto'
+import { createHash, randomUUID as uuid } from 'node:crypto'
 
 import moment from 'moment'
 
 import { ExternalCommunicator } from '@diia-inhouse/diia-queue'
 import TestKit from '@diia-inhouse/test'
-import { DocStatus, DocumentType, DocumentTypeCamelCase, HttpStatusCode, InternalPassport } from '@diia-inhouse/types'
+import { DocStatus, HttpStatusCode } from '@diia-inhouse/types'
 
 import TaxpayerCardService from '@src/documents/taxpayerCard/services/document'
+import { InternalPassport, PassportType } from '@src/generated'
 
 import GetDesignSystemDocumentsToProcess from '@actions/v1/getDesignSystemDocumentsToProcess'
 
@@ -20,8 +21,8 @@ import { getPassport } from '@tests/mocks/stubs/providers/eis/passport'
 import { getApp } from '@tests/utils/getApp'
 
 import { ActionResult } from '@interfaces/actions/v1/getDesignSystemDocumentsToProcess'
-import { PassportType } from '@interfaces/dto'
-import { DocumentsExpiration } from '@interfaces/models/documentsExpiration'
+import { DocumentIdsExpiration, DocumentsExpiration } from '@interfaces/models/documentsExpiration'
+import { PassportDocumentType, PassportDocumentTypeCamelCase } from '@interfaces/services/passport'
 
 describe(`Action ${GetDesignSystemDocumentsToProcess.name}`, () => {
     const testKit = new TestKit()
@@ -50,7 +51,7 @@ describe(`Action ${GetDesignSystemDocumentsToProcess.name}`, () => {
     })
 
     describe('Request with eTag', () => {
-        it(`should return ${DocumentType.InternalPassport} when eTag not equal`, async () => {
+        it(`should return ${PassportDocumentType.InternalPassport} when eTag not equal`, async () => {
             // Arrange
             const actionArgs = testKit.session.getUserActionArguments({}, {}, { validItn: true })
             const user = actionArgs.session.user
@@ -61,7 +62,7 @@ describe(`Action ${GetDesignSystemDocumentsToProcess.name}`, () => {
             const { _id: expirationModelId } = await documentsExpirationModel.create<DocumentsExpiration>({
                 userIdentifier: user.identifier,
                 mobileUid: headers.mobileUid,
-                [DocumentType.InternalPassport]: {
+                [PassportDocumentType.InternalPassport]: {
                     date: moment().add(1, 'year').toDate(),
                     eTag: savedETag,
                 },
@@ -81,18 +82,20 @@ describe(`Action ${GetDesignSystemDocumentsToProcess.name}`, () => {
             const result = await action.handler({
                 ...actionArgs,
                 params: {
-                    documents: [{ type: DocumentTypeCamelCase.idCard, eTag: actualETag }],
+                    documents: [{ type: PassportDocumentTypeCamelCase.IdCard, eTag: actualETag }],
                 },
             })
 
             // Assert
             const expirationModel = await documentsExpirationModel.findById(expirationModelId)
 
-            expect(expirationModel?.[DocumentType.InternalPassport]?.eTag).toEqual(actualETag)
-            expect(expirationModel?.[DocumentType.InternalPassport]?.date.getTime()).toBeGreaterThan(new Date().getTime())
+            expect((<DocumentIdsExpiration>expirationModel?.[PassportDocumentType.InternalPassport])?.eTag).toEqual(actualETag)
+            expect((<DocumentIdsExpiration>expirationModel?.[PassportDocumentType.InternalPassport])?.date.getTime()).toBeGreaterThan(
+                Date.now(),
+            )
 
             expect(result).toMatchObject<ActionResult>({
-                [DocumentTypeCamelCase.idCard]: {
+                [PassportDocumentTypeCamelCase.IdCard]: {
                     status: HttpStatusCode.OK,
                     data: [
                         expect.objectContaining<Partial<InternalPassport>>({
@@ -106,7 +109,7 @@ describe(`Action ${GetDesignSystemDocumentsToProcess.name}`, () => {
             })
         })
 
-        it(`should return ${DocumentType.InternalPassport} when eTag equal, date expired`, async () => {
+        it(`should return ${PassportDocumentType.InternalPassport} when eTag equal, date expired`, async () => {
             // Arrange
             const actionArgs = testKit.session.getUserActionArguments({}, {}, { validItn: true })
             const user = actionArgs.session.user
@@ -123,7 +126,7 @@ describe(`Action ${GetDesignSystemDocumentsToProcess.name}`, () => {
             const { _id: expirationModelId } = await documentsExpirationModel.create<DocumentsExpiration>({
                 userIdentifier: user.identifier,
                 mobileUid: headers.mobileUid,
-                [DocumentType.InternalPassport]: {
+                [PassportDocumentType.InternalPassport]: {
                     date: moment().subtract(1, 'year').toDate(),
                     eTag: previousEtag,
                 },
@@ -136,18 +139,20 @@ describe(`Action ${GetDesignSystemDocumentsToProcess.name}`, () => {
             const result = await action.handler({
                 ...actionArgs,
                 params: {
-                    documents: [{ type: DocumentTypeCamelCase.idCard, eTag: previousEtag }],
+                    documents: [{ type: PassportDocumentTypeCamelCase.IdCard, eTag: previousEtag }],
                 },
             })
 
             // Assert
             const expirationModel = await documentsExpirationModel.findById(expirationModelId)
 
-            expect(expirationModel?.[DocumentType.InternalPassport]?.eTag).toEqual(actualETag)
-            expect(expirationModel?.[DocumentType.InternalPassport]?.date.getTime()).toBeGreaterThan(new Date().getTime())
+            expect((<DocumentIdsExpiration>expirationModel?.[PassportDocumentType.InternalPassport])?.eTag).toEqual(actualETag)
+            expect((<DocumentIdsExpiration>expirationModel?.[PassportDocumentType.InternalPassport])?.date.getTime()).toBeGreaterThan(
+                Date.now(),
+            )
 
             expect(result).toMatchObject<ActionResult>({
-                [DocumentTypeCamelCase.idCard]: {
+                [PassportDocumentTypeCamelCase.IdCard]: {
                     status: HttpStatusCode.OK,
                     data: [
                         expect.objectContaining<Partial<InternalPassport>>({
@@ -161,7 +166,7 @@ describe(`Action ${GetDesignSystemDocumentsToProcess.name}`, () => {
             })
         })
 
-        it(`should not return ${DocumentType.InternalPassport} when eTag equal, date not expired`, async () => {
+        it(`should not return ${PassportDocumentType.InternalPassport} when eTag equal, date not expired`, async () => {
             // Arrange
             const actionArgs = testKit.session.getUserActionArguments({}, {}, { validItn: true })
             const user = actionArgs.session.user
@@ -179,7 +184,7 @@ describe(`Action ${GetDesignSystemDocumentsToProcess.name}`, () => {
             const { _id: expirationModelId } = await documentsExpirationModel.create<DocumentsExpiration>({
                 userIdentifier: user.identifier,
                 mobileUid: headers.mobileUid,
-                [DocumentType.InternalPassport]: {
+                [PassportDocumentType.InternalPassport]: {
                     date: expireAt,
                     eTag: actualETag,
                 },
@@ -192,15 +197,17 @@ describe(`Action ${GetDesignSystemDocumentsToProcess.name}`, () => {
             const result = await action.handler({
                 ...actionArgs,
                 params: {
-                    documents: [{ type: DocumentTypeCamelCase.idCard, eTag: actualETag }],
+                    documents: [{ type: PassportDocumentTypeCamelCase.IdCard, eTag: actualETag }],
                 },
             })
 
             // Assert
             const expirationModel = await documentsExpirationModel.findById(expirationModelId)
 
-            expect(expirationModel?.[DocumentType.InternalPassport]?.eTag).toEqual(actualETag)
-            expect(expirationModel?.[DocumentType.InternalPassport]?.date.getTime()).toEqual(expireAt.getTime())
+            expect((<DocumentIdsExpiration>expirationModel?.[PassportDocumentType.InternalPassport])?.eTag).toEqual(actualETag)
+            expect((<DocumentIdsExpiration>expirationModel?.[PassportDocumentType.InternalPassport])?.date.getTime()).toEqual(
+                expireAt.getTime(),
+            )
 
             expect(result).toEqual<ActionResult>({})
         })

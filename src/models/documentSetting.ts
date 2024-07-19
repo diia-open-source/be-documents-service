@@ -1,22 +1,26 @@
-import { Model, Schema, SchemaDefinition, model, models } from 'mongoose'
+import { Model, Schema, SchemaDefinition, model, models } from '@diia-inhouse/db'
 
-import { DocumentType } from '@diia-inhouse/types'
+import { documentTypes } from '@src/documents/deps'
 
 import { DocumentSetting, DocumentSettingVersion, ExpirationTime, ExpirationType } from '@interfaces/models/documentSetting'
 
-const expirationSchemaDefinition = Object.values(ExpirationType).reduce((acc: SchemaDefinition<ExpirationTime>, type: ExpirationType) => {
-    acc[type] = { type: Number, required: true }
+const expirationSchemaDefinition = ((): SchemaDefinition<ExpirationTime> => {
+    const acc: SchemaDefinition<ExpirationTime> = {}
+    for (const type of Object.values(ExpirationType)) {
+        acc[type] = { type: Number, required: true }
+    }
 
     return acc
-}, {})
+})()
 
 const expirationSchema = new Schema<ExpirationTime>(expirationSchemaDefinition, { _id: false })
 
 const documentSettingSchema = new Schema<DocumentSetting>(
     {
-        type: { type: String, enum: Object.values(DocumentType), required: true },
+        type: { type: String, enum: documentTypes, required: true },
         version: { type: Number, enum: Object.values(DocumentSettingVersion).filter(Number.isInteger), required: true },
         expirationTime: { type: expirationSchema, required: true },
+        defaultHidden: { type: Boolean },
     },
     {
         timestamps: true,

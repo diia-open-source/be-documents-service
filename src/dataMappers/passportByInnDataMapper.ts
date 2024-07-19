@@ -165,7 +165,7 @@ export default class PassportByInnDataMapper {
 
         return {
             address: {
-                registration_inf: !!fullName,
+                registration_inf: Boolean(fullName),
                 postbox,
                 address_koatuu: addressKoatuu,
                 address_katottg: addressKatottg,
@@ -198,6 +198,11 @@ export default class PassportByInnDataMapper {
             return
         }
 
-        return searchStrings.reduce((result, searchString) => result.replace(searchString, ''), name).trim()
+        let result = name
+        for (const searchString of searchStrings) {
+            result = result.replace(searchString, '')
+        }
+
+        return result.trim()
     }
 }

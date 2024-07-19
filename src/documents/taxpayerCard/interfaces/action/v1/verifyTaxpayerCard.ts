@@ -1,4 +1,6 @@
-import { AppUserActionHeaders, TaxpayerCard, UserActionArguments } from '@diia-inhouse/types'
+import { AppUserActionHeaders, UserActionArguments } from '@diia-inhouse/types'
+
+import { TaxpayerCard } from '@src/documents/taxpayerCard/interfaces/services'
 
 interface ActionHeaders extends AppUserActionHeaders {
     token: string

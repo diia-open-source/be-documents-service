@@ -1,28 +1,32 @@
 import TestKit, { mockInstance } from '@diia-inhouse/test'
-import { DocumentType } from '@diia-inhouse/types'
 
 import VerifyServiceEntranceDocumentAction from '@actions/v1/verifyServiceEntranceDocument'
 
+import DocumentsService from '@services/documents'
 import DocumentVerificationService from '@services/documentVerification'
+
+import { InternalPassportInstance } from '@interfaces/providers/eis'
+import { PassportDocumentType } from '@interfaces/services/passport'
 
 describe(`Action ${VerifyServiceEntranceDocumentAction.name}`, () => {
     const testKit = new TestKit()
+    const documentsService = mockInstance(DocumentsService)
     const documentVerificationService = mockInstance(DocumentVerificationService)
-    const action = new VerifyServiceEntranceDocumentAction(documentVerificationService)
+    const action = new VerifyServiceEntranceDocumentAction(documentsService, documentVerificationService)
 
     it('should return service entrance document after verification', async () => {
         const session = testKit.session.getServiceEntranceSession()
         const headers = { ...testKit.session.getHeaders(), token: 'token' }
         const args = {
             params: {
-                documentType: DocumentType.InternalPassport,
+                documentType: PassportDocumentType.InternalPassport,
                 otp: 'otp',
             },
             session,
             headers,
         }
 
-        const data = testKit.docs.getInternalPassport()
+        const data: InternalPassportInstance = testKit.docs.generateDocument(PassportDocumentType.InternalPassport)
 
         jest.spyOn(documentVerificationService, 'verifyDocument').mockResolvedValueOnce(data)
 

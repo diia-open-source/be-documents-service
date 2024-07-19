@@ -1,25 +1,22 @@
-import { randomUUID } from 'crypto'
+import { randomUUID } from 'node:crypto'
 
 import { BadRequestError } from '@diia-inhouse/errors'
 import TestKit from '@diia-inhouse/test'
-import { DocumentType } from '@diia-inhouse/types'
 
 import DocumentDownloadService from '@services/documentDownload'
 
-import PluginDepsCollectionMock from '@tests/mocks/stubs/documentDepsCollection'
-
-import { DocumentService } from '@interfaces/services/documents'
+import { DocumentDownloadResponse, DocumentService } from '@interfaces/services/documents'
 
 describe('DocumentDownloadService', () => {
     const testKit = new TestKit()
 
     describe('method downloadDocument', () => {
         it('should successfully download document with provided type', async () => {
-            const documentType = <DocumentType>'document-type'
-            const mockDocumentService = <DocumentService>(<unknown>{
-                downloadDocument: () => {},
+            const documentType = 'document-type'
+            const mockDocumentService = <Partial<DocumentService<string, string>>>{
+                downloadDocument: async () => <DocumentDownloadResponse>{},
                 documentTypes: [documentType],
-            })
+            }
             const { user } = testKit.session.getUserSession()
             const params = {
                 documentId: randomUUID(),
@@ -35,8 +32,9 @@ describe('DocumentDownloadService', () => {
 
             jest.spyOn(mockDocumentService, 'downloadDocument').mockResolvedValueOnce(expectedResult)
 
-            const documentServices = new PluginDepsCollectionMock([mockDocumentService])
-            const documentDownloadService = new DocumentDownloadService(documentServices)
+            const documentDownloadService = new DocumentDownloadService([mockDocumentService])
+
+            documentDownloadService.onRegistrationsFinished()
 
             expect(await documentDownloadService.downloadDocument(params, user)).toEqual(expectedResult)
 
@@ -44,15 +42,14 @@ describe('DocumentDownloadService', () => {
         })
 
         it('should fail with error in case download strategy for provided document type is not defined', async () => {
-            const invalidDocumentType = <DocumentType>'invalid-document-type'
+            const invalidDocumentType = 'invalid-document-type'
             const { user } = testKit.session.getUserSession()
             const params = {
                 documentId: randomUUID(),
                 documentType: invalidDocumentType,
             }
 
-            const documentServices = new PluginDepsCollectionMock([])
-            const documentDownloadService = new DocumentDownloadService(documentServices)
+            const documentDownloadService = new DocumentDownloadService([])
 
             await expect(async () => {
                 await documentDownloadService.downloadDocument(params, user)
